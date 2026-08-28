@@ -66,6 +66,21 @@ The workstation then displays `Live calendar`. If the export is older than ten m
 `Stale`. This bridge covers scheduled economic events only. Broker News-tab articles and
 unscheduled headlines still require a separately licensed news provider.
 
+## M1 Paper Scalp Indicator
+
+`integrations/mt5/TraderAI_M1_ExtremeScalp.mq5` is a chart indicator for the M1 timeframe. It uses
+the 10/90 RSI extreme as a setup zone and waits for a rejection candle, RSI3/RSI7 direction,
+MACD histogram movement, and an optional higher-timeframe bias before drawing a signal. It also
+shows fast/slow EMAs, the current score, an explainable waiting reason, and paper-only entry,
+stop, and target estimates. A signal is never a guarantee of a reversal.
+
+Copy the file into `MQL5/Indicators/TraderAI`, compile it in MetaEditor, refresh Navigator, and
+attach **TraderAI_M1_ExtremeScalp** to an M1 chart. Its default inputs keep terminal alerts and
+the common-file paper signal log enabled while leaving real order placement impossible. The log
+is written to `FILE_COMMON` as `TraderAI-mt5-paper-signals.csv` when a new confirmed signal occurs.
+The indicator is intentionally separate from `TraderCalendarBridge`; attach both to a chart when
+you want calendar export and chart signals at the same time.
+
 ## Adapter Requirements
 
 A production adapter should:
