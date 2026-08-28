@@ -236,6 +236,7 @@ button:disabled {
   gap: 12px;
   padding: 12px;
   min-height: 0;
+  align-items: start;
 }
 
 .charts-grid {
@@ -244,6 +245,8 @@ button:disabled {
   grid-auto-rows: minmax(300px, auto);
   gap: 10px;
   min-width: 0;
+  align-self: start;
+  align-content: start;
 }
 
 .charts-grid.one {
@@ -684,6 +687,7 @@ button:disabled {
   padding: 10px;
   overflow-y: auto;
   min-width: 0;
+  align-self: start;
 }
 
 .rail-block {
