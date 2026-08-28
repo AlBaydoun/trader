@@ -108,6 +108,10 @@ class PaperTradeDTO(APIModel):
     factor_categories: list[str]
     learning_adjustment: float
     learned_score: float
+    signal_at: datetime | None
+    signal_price: float | None
+    signal_level: str | None
+    signal_recommendation: str | None
 
 
 class PaperDecisionDTO(APIModel):

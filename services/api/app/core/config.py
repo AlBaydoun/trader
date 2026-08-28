@@ -35,6 +35,15 @@ class Settings(BaseSettings):
     paper_adaptive_learning_enabled: bool = True
     paper_learning_min_samples: int = Field(default=8, ge=3, le=1000)
 
+    extreme_paper_auto_enabled: bool = True
+    extreme_paper_state_file: str = "../../data/extreme-paper-trading.json"
+    extreme_paper_starting_balance: float = Field(default=10000.0, gt=0)
+    extreme_paper_risk_per_trade_pct: float = Field(default=0.1, ge=0.01, le=2.0)
+    extreme_paper_max_open_positions: int = Field(default=20, ge=1, le=200)
+    extreme_paper_min_opportunity_score: float = Field(default=70.0, ge=0.0, le=100.0)
+    extreme_paper_confirmed_only: bool = True
+    extreme_paper_max_position_minutes: int = Field(default=240, ge=1, le=43200)
+
     extreme_scan_enabled: bool = True
     extreme_scan_cache_seconds: int = Field(default=10, ge=5, le=300)
     extreme_scan_interval_seconds: int = Field(default=15, ge=10, le=3600)

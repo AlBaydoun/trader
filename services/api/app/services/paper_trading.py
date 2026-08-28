@@ -59,6 +59,10 @@ class PaperTrade:
     factor_categories: list[str] = field(default_factory=list)
     learning_adjustment: float = 0.0
     learned_score: float = 0.0
+    signal_at: datetime | None = None
+    signal_price: float | None = None
+    signal_level: str | None = None
+    signal_recommendation: str | None = None
 
 
 @dataclass
@@ -190,6 +194,7 @@ class PaperTradingService:
         max_position_minutes: int,
         adaptive_learning_enabled: bool = True,
         learning_min_samples: int = 8,
+        trade_source: str = "mt5-virtual",
     ) -> None:
         self.state_file = self._resolve_state_file(state_file)
         self.backup_file = self.state_file.with_suffix(f"{self.state_file.suffix}.bak")
@@ -204,6 +209,7 @@ class PaperTradingService:
         self.max_position_minutes = max_position_minutes
         self.adaptive_learning_enabled = adaptive_learning_enabled
         self.learning_min_samples = learning_min_samples
+        self.trade_source = trade_source
         self.timeframe = "1m"
         self.trades: list[PaperTrade] = []
         self.decisions: list[PaperDecision] = []
@@ -588,7 +594,7 @@ class PaperTradingService:
             opportunity_score=opportunity.opportunity_score,
             scan_rank=opportunity.rank,
             reasons=[reason.message for reason in opportunity.reasons],
-            source="mt5-virtual",
+            source=self.trade_source,
             source_account_id=source_account_id,
             opened_at=now,
             updated_at=now,
@@ -599,6 +605,10 @@ class PaperTradingService:
             learned_score=round(
                 max(0.0, min(100.0, opportunity.opportunity_score + learning_adjustment)), 1
             ),
+            signal_at=opportunity.signal_at or now,
+            signal_price=opportunity.signal_price or opportunity.entry,
+            signal_level=opportunity.signal_level,
+            signal_recommendation=opportunity.signal_recommendation or opportunity.recommendation,
         )
         self.trades.append(trade)
         return trade

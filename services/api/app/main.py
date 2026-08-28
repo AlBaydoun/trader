@@ -44,6 +44,7 @@ from app.schemas import (
 )
 from app.services.accounts import AccountRegistry, BrokerAccountProfile
 from app.services.backtest import BacktestService
+from app.services.extreme_paper_trading import ExtremePaperTradingService
 from app.services.extreme_scanner import ExtremeScanResult, ExtremeSignalScanner
 from app.services.market_data import MarketDataService
 from app.services.market_scanner import MarketOpportunityScanner
@@ -105,6 +106,25 @@ paper_trader = PaperTradingService(
     max_position_minutes=settings.paper_max_position_minutes,
     adaptive_learning_enabled=settings.paper_adaptive_learning_enabled,
     learning_min_samples=settings.paper_learning_min_samples,
+)
+extreme_paper_trader = ExtremePaperTradingService(
+    PaperTradingService(
+        settings.extreme_paper_state_file,
+        enabled=settings.extreme_paper_auto_enabled,
+        starting_balance=settings.extreme_paper_starting_balance,
+        risk_per_trade_pct=settings.extreme_paper_risk_per_trade_pct,
+        max_open_positions=settings.extreme_paper_max_open_positions,
+        minimum_opportunity_score=settings.extreme_paper_min_opportunity_score,
+        commission_bps=settings.paper_commission_bps,
+        slippage_bps=settings.paper_slippage_bps,
+        cycle_interval_seconds=settings.extreme_scan_interval_seconds,
+        max_position_minutes=settings.extreme_paper_max_position_minutes,
+        adaptive_learning_enabled=settings.paper_adaptive_learning_enabled,
+        learning_min_samples=settings.paper_learning_min_samples,
+        trade_source="extreme-scanner-virtual",
+    ),
+    mt5_bridge,
+    confirmed_only=settings.extreme_paper_confirmed_only,
 )
 paper_cycle_lock = Lock()
 
@@ -200,15 +220,27 @@ def run_paper_cycle(force: bool = False) -> PaperPortfolio:
         return portfolio
 
 
-def run_extreme_cycle(force: bool = False) -> ExtremeScanResult:
+def run_extreme_cycle(
+    force: bool = False,
+    process_virtual_trades: bool = False,
+) -> ExtremeScanResult:
     with paper_cycle_lock:
-        return extreme_scanner.scan(
-            account_registry.active_account(),
-            paper_trader.timeframe,
+        account = account_registry.active_account()
+        result = extreme_scanner.scan(
+            account,
+            extreme_paper_trader.timeframe if process_virtual_trades else paper_trader.timeframe,
             settings.market_scan_max_symbols,
             settings.market_scan_max_symbols,
             force,
         )
+        if process_virtual_trades:
+            extreme_paper_trader.process_scan(result, account)
+        return result
+
+
+def run_extreme_paper_cycle(force: bool = False) -> PaperPortfolio:
+    run_extreme_cycle(force, process_virtual_trades=True)
+    return extreme_paper_trader.snapshot()
 
 
 async def paper_trading_loop() -> None:
@@ -227,7 +259,11 @@ async def extreme_scanning_loop() -> None:
     while True:
         if settings.extreme_scan_enabled:
             with suppress(Exception):
-                await asyncio.to_thread(run_extreme_cycle)
+                await asyncio.to_thread(
+                    run_extreme_cycle,
+                    False,
+                    extreme_paper_trader.enabled,
+                )
         await asyncio.sleep(settings.extreme_scan_interval_seconds)
 
 
@@ -442,6 +478,11 @@ def paper_portfolio() -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(paper_trader.snapshot())
 
 
+@app.get("/paper/extreme/portfolio", response_model=PaperPortfolioDTO)
+def extreme_paper_portfolio() -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(extreme_paper_trader.snapshot())
+
+
 @app.post("/paper/control", response_model=PaperPortfolioDTO)
 def control_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
     portfolio = paper_trader.update_control(
@@ -453,9 +494,25 @@ def control_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(portfolio)
 
 
+@app.post("/paper/extreme/control", response_model=PaperPortfolioDTO)
+def control_extreme_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
+    portfolio = extreme_paper_trader.update_control(
+        enabled=payload.enabled,
+        timeframe=payload.timeframe,
+        minimum_opportunity_score=payload.minimum_opportunity_score,
+        max_open_positions=payload.max_open_positions,
+    )
+    return PaperPortfolioDTO.model_validate(portfolio)
+
+
 @app.post("/paper/cycle", response_model=PaperPortfolioDTO)
 def cycle_paper_trading(force: bool = Query(default=False)) -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(run_paper_cycle(force))
+
+
+@app.post("/paper/extreme/cycle", response_model=PaperPortfolioDTO)
+def cycle_extreme_paper_trading(force: bool = Query(default=True)) -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(run_extreme_paper_cycle(force))
 
 
 @app.post("/paper/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
@@ -482,11 +539,44 @@ def close_paper_position(trade_id: str) -> PaperPortfolioDTO:
     )
 
 
+@app.post("/paper/extreme/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
+def close_extreme_paper_position(trade_id: str) -> PaperPortfolioDTO:
+    position = next(
+        (item for item in extreme_paper_trader.positions() if item.id == trade_id),
+        None,
+    )
+    if position is None:
+        raise HTTPException(status_code=404, detail="Open extreme virtual position not found.")
+    candles = mt5_bridge.candles(
+        account_registry.active_account(),
+        position.symbol,
+        extreme_paper_trader.timeframe,
+        80,
+    )
+    if not candles:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A verified current MT5 price is required to close the extreme virtual position."
+            ),
+        )
+    return PaperPortfolioDTO.model_validate(
+        extreme_paper_trader.close_trade(trade_id, candles[-1].close)
+    )
+
+
 @app.post("/paper/reset", response_model=PaperPortfolioDTO)
 def reset_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
     if payload.confirmation != "RESET PAPER ACCOUNT":
         raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
     return PaperPortfolioDTO.model_validate(paper_trader.reset())
+
+
+@app.post("/paper/extreme/reset", response_model=PaperPortfolioDTO)
+def reset_extreme_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
+    if payload.confirmation != "RESET PAPER ACCOUNT":
+        raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
+    return PaperPortfolioDTO.model_validate(extreme_paper_trader.reset())
 
 
 @app.get("/candles/{symbol}", response_model=list[CandleDTO])

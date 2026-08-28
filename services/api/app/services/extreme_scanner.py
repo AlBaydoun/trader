@@ -150,8 +150,18 @@ class ExtremeSignalScanner:
         atr = self._atr(candles[-15:])
         macd_bias = 50.0 + 50.0 * tanh((macd / atr) * 3.0) if atr else 50.0
         rsi1 = self._rsi_one(closes)
-        trend_bias = 100.0 if ema_fast >= ema_slow else 0.0
-        score = max(0.0, min(100.0, rsi1 * 0.7 + macd_bias * 0.2 + trend_bias * 0.1))
+        # Keep RSI(1) dominant while scoring MACD/MA context for a reversal, so the
+        # strict 85/15 paper filter is attainable instead of self-contradictory.
+        if rsi1 >= 50:
+            reversal_macd_bias = 100.0 - macd_bias
+            reversal_trend_bias = 100.0 if ema_fast < ema_slow else 0.0
+        else:
+            reversal_macd_bias = macd_bias
+            reversal_trend_bias = 100.0 if ema_fast > ema_slow else 0.0
+        score = max(
+            0.0,
+            min(100.0, rsi1 * 0.9 + reversal_macd_bias * 0.05 + reversal_trend_bias * 0.05),
+        )
         level = self._level(score)
         recommendation, reasons = self._recommendation(level, rsi1, macd, ema_fast, ema_slow, atr)
         return ExtremeReading(

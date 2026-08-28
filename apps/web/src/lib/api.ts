@@ -99,6 +99,10 @@ export function getPaperPortfolio(): Promise<PaperPortfolio> {
   return getJson<PaperPortfolio>("/paper/portfolio");
 }
 
+export function getExtremePaperPortfolio(): Promise<PaperPortfolio> {
+  return getJson<PaperPortfolio>("/paper/extreme/portfolio");
+}
+
 export function scanExtremeLevels(timeframe: string, force = false): Promise<ExtremeScan> {
   return getJson<ExtremeScan>(
     `/extreme/scan?timeframe=${timeframe}&limit=50&force=${force ? "true" : "false"}`
@@ -109,16 +113,32 @@ export function updatePaperControl(control: PaperControl): Promise<PaperPortfoli
   return sendJson<PaperPortfolio>("/paper/control", control);
 }
 
+export function updateExtremePaperControl(control: PaperControl): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>("/paper/extreme/control", control);
+}
+
 export function runPaperCycle(force = true): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>(`/paper/cycle?force=${force ? "true" : "false"}`);
+}
+
+export function runExtremePaperCycle(force = true): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>(`/paper/extreme/cycle?force=${force ? "true" : "false"}`);
 }
 
 export function closePaperPosition(tradeId: string): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>(`/paper/positions/${encodeURIComponent(tradeId)}/close`);
 }
 
+export function closeExtremePaperPosition(tradeId: string): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>(`/paper/extreme/positions/${encodeURIComponent(tradeId)}/close`);
+}
+
 export function resetPaperPortfolio(): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>("/paper/reset", { confirmation: "RESET PAPER ACCOUNT" });
+}
+
+export function resetExtremePaperPortfolio(): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>("/paper/extreme/reset", { confirmation: "RESET PAPER ACCOUNT" });
 }
 
 export function getBacktest(symbol: string, timeframe: string): Promise<Backtest> {

@@ -19,6 +19,28 @@ paper ledger is stored at `PAPER_STATE_FILE` and survives API restarts. Relative
 to the API service directory, so starting the server from a different folder no longer creates a
 second empty ledger. Each save is atomic and keeps a `.bak` recovery copy.
 
+## Extreme Virtual Trading
+
+The `Extreme Virtual Trading` panel is a separate paper account for the 85/15 scanner. It is
+enabled by default but remains virtual-only. It scans the full tradeable MT5 catalog and opens a
+simulated position only when an alert reaches 85.00 or 15.00 and the configured confirmation
+checks pass: MACD direction and fast/slow moving-average direction must agree with the reversal.
+Its default minimum score is 70, which corresponds to the threshold boundary in the composite
+score. This is a selectivity filter, not a guarantee of winning trades.
+
+The extreme ledger uses the same execution lifecycle as the regular paper engine: risk-sized
+quantity, configured commission and slippage, stop loss, take profit, time limit, operator close,
+mark-to-market updates, equity curve, decision log, and paper-only learning. It is stored at
+`EXTREME_PAPER_STATE_FILE`, so restarting the API does not erase its open trades, closed results,
+or learning history. The panel records both the exact signal timestamp/price and the modeled fill,
+then shows current virtual P/L until the trade exits.
+
+Controls are independent. Pause the extreme engine without pausing broad-market paper trading,
+change its timeframe or score threshold, run a cycle immediately, close individual virtual
+positions, or reset only the extreme ledger. Use the extreme panel's `Profit since signals`,
+`Win rate`, `Profit factor`, history, and learning tabs to evaluate the filter over a meaningful
+sample instead of optimizing for a single trade.
+
 ## Workstation Controls
 
 Use the `Paper` button in the header to open the virtual results section. It shows:

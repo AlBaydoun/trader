@@ -16,6 +16,7 @@ import {
   getMT5Quotes,
   getMarketSymbols,
   getNewsAnalysis,
+  getExtremePaperPortfolio,
   getPaperPortfolio,
   scanExtremeLevels,
   getStatus,
@@ -24,8 +25,12 @@ import {
   scanWholeMarket,
   setActiveAccount,
   closePaperPosition,
+  closeExtremePaperPosition,
+  resetExtremePaperPortfolio,
   resetPaperPortfolio,
+  runExtremePaperCycle,
   runPaperCycle,
+  updateExtremePaperControl,
   updatePaperControl
 } from "./lib/api";
 import { playExtremeAlert, playSignalTone, speakExtremeAlert, speakSignal } from "./lib/alerts";
@@ -76,6 +81,9 @@ export function App() {
   const [paperPortfolio, setPaperPortfolio] = useState<PaperPortfolio>();
   const [paperBusy, setPaperBusy] = useState(false);
   const [paperError, setPaperError] = useState("");
+  const [extremePaperPortfolio, setExtremePaperPortfolio] = useState<PaperPortfolio>();
+  const [extremePaperBusy, setExtremePaperBusy] = useState(false);
+  const [extremePaperError, setExtremePaperError] = useState("");
   const [extremeScan, setExtremeScan] = useState<ExtremeScan>();
   const [extremeBusy, setExtremeBusy] = useState(false);
   const extremeAlertIdsRef = useRef<Set<string>>(new Set());
@@ -132,6 +140,17 @@ export function App() {
     const interval = window.setInterval(() => void refreshPaper(), 10000);
     return () => window.clearInterval(interval);
   }, [refreshPaper]);
+
+  const refreshExtremePaper = useCallback(async () => {
+    const portfolio = await getExtremePaperPortfolio().catch(() => null);
+    if (portfolio) setExtremePaperPortfolio(portfolio);
+  }, []);
+
+  useEffect(() => {
+    void refreshExtremePaper();
+    const interval = window.setInterval(() => void refreshExtremePaper(), 10000);
+    return () => window.clearInterval(interval);
+  }, [refreshExtremePaper]);
 
   const refreshMarket = useCallback(async () => {
     setMarketScanning(true);
@@ -355,6 +374,55 @@ export function App() {
     }
   }
 
+  async function controlExtremePaper(control: PaperControl) {
+    setExtremePaperBusy(true);
+    setExtremePaperError("");
+    try {
+      setExtremePaperPortfolio(await updateExtremePaperControl(control));
+    } catch (error) {
+      setExtremePaperError(error instanceof Error ? error.message : "Extreme virtual control update failed.");
+    } finally {
+      setExtremePaperBusy(false);
+    }
+  }
+
+  async function runExtremeVirtualCycle() {
+    setExtremePaperBusy(true);
+    setExtremePaperError("");
+    try {
+      setExtremePaperPortfolio(await runExtremePaperCycle(true));
+    } catch (error) {
+      setExtremePaperError(error instanceof Error ? error.message : "Extreme virtual cycle failed.");
+    } finally {
+      setExtremePaperBusy(false);
+    }
+  }
+
+  async function closeExtremeVirtualPosition(tradeId: string) {
+    setExtremePaperBusy(true);
+    setExtremePaperError("");
+    try {
+      setExtremePaperPortfolio(await closeExtremePaperPosition(tradeId));
+    } catch (error) {
+      setExtremePaperError(error instanceof Error ? error.message : "Extreme virtual position could not close.");
+    } finally {
+      setExtremePaperBusy(false);
+    }
+  }
+
+  async function resetExtremeVirtualPortfolio() {
+    if (!window.confirm("Reset all extreme virtual trades, history, and performance results?")) return;
+    setExtremePaperBusy(true);
+    setExtremePaperError("");
+    try {
+      setExtremePaperPortfolio(await resetExtremePaperPortfolio());
+    } catch (error) {
+      setExtremePaperError(error instanceof Error ? error.message : "Extreme virtual portfolio reset failed.");
+    } finally {
+      setExtremePaperBusy(false);
+    }
+  }
+
   function openPaperPanel() {
     const panel = document.getElementById("paper-trading");
     const header = document.querySelector<HTMLElement>(".workspace-header");
@@ -489,6 +557,16 @@ export function App() {
         onUpper85NotificationsToggle={(enabled) => setExtremeNotifications((current) => ({ ...current, upper85: enabled }))}
         onLower15NotificationsToggle={(enabled) => setExtremeNotifications((current) => ({ ...current, lower15: enabled }))}
         onRun={() => void runExtremeScan()}
+      />
+      <PaperTradingPanel
+        variant="extreme"
+        portfolio={extremePaperPortfolio}
+        busy={extremePaperBusy}
+        error={extremePaperError}
+        onControl={(control) => void controlExtremePaper(control)}
+        onRun={() => void runExtremeVirtualCycle()}
+        onClose={(tradeId) => void closeExtremeVirtualPosition(tradeId)}
+        onReset={() => void resetExtremeVirtualPortfolio()}
       />
     </main>
   );

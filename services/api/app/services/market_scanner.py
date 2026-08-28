@@ -26,6 +26,10 @@ class MarketOpportunity:
     quote_age_seconds: int | None
     recommendation: str
     reasons: list[SignalReason]
+    signal_at: datetime | None = None
+    signal_price: float | None = None
+    signal_level: str | None = None
+    signal_recommendation: str | None = None
 
 
 @dataclass(frozen=True)

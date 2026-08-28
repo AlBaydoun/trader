@@ -13,8 +13,10 @@ import {
 import type { PaperControl, PaperEquityPoint, PaperPortfolio, PaperTrade } from "../types";
 
 type PaperTab = "open" | "history" | "learning" | "log";
+type PaperTradingVariant = "market" | "extreme";
 
 interface PaperTradingPanelProps {
+  variant?: PaperTradingVariant;
   portfolio?: PaperPortfolio;
   busy: boolean;
   error: string;
@@ -25,6 +27,7 @@ interface PaperTradingPanelProps {
 }
 
 export function PaperTradingPanel({
+  variant = "market",
   portfolio,
   busy,
   error,
@@ -34,17 +37,19 @@ export function PaperTradingPanel({
   onReset
 }: PaperTradingPanelProps) {
   const [tab, setTab] = useState<PaperTab>("open");
+  const extreme = variant === "extreme";
   const engine = portfolio?.engine;
   const metrics = portfolio?.metrics;
+  const panelId = extreme ? "extreme-paper-trading" : "paper-trading";
 
   return (
-    <section className="paper-workspace" id="paper-trading" aria-label="Virtual paper trading">
+    <section className="paper-workspace" id={panelId} aria-label={extreme ? "Extreme virtual trading" : "Virtual paper trading"}>
       <header className="paper-header">
         <div className="paper-title">
           <span className="paper-title-icon"><FlaskConical size={19} /></span>
           <div>
-            <h2>Virtual Trading</h2>
-            <span>Automatic whole-market simulation with no real money</span>
+            <h2>{extreme ? "Extreme Virtual Trading" : "Virtual Trading"}</h2>
+            <span>{extreme ? "Confirmed 85/15 reversal simulation with no real money" : "Automatic whole-market simulation with no real money"}</span>
           </div>
         </div>
         <div className="paper-actions">
@@ -65,8 +70,8 @@ export function PaperTradingPanel({
           <button
             className="icon-button"
             type="button"
-            title="Reset virtual portfolio"
-            aria-label="Reset virtual portfolio"
+            title={extreme ? "Reset extreme virtual portfolio" : "Reset virtual portfolio"}
+            aria-label={extreme ? "Reset extreme virtual portfolio" : "Reset virtual portfolio"}
             disabled={busy}
             onClick={onReset}
           >
@@ -79,7 +84,7 @@ export function PaperTradingPanel({
         {engine?.enabled ? <Activity size={15} /> : <CircleStop size={15} />}
         <strong>{engine?.enabled ? "Scanning and simulating" : "Virtual engine paused"}</strong>
         <span>
-          {error || engine?.last_error || cycleSummary(portfolio)}
+          {error || engine?.last_error || cycleSummary(portfolio, extreme)}
         </span>
         <b>Virtual only</b>
         {portfolio?.persistence && (
@@ -95,9 +100,9 @@ export function PaperTradingPanel({
 
       {metrics && engine ? (
         <>
-          <div className="paper-metrics" aria-label="Paper trading performance">
+          <div className="paper-metrics" aria-label={extreme ? "Extreme virtual trading performance" : "Paper trading performance"}>
             <PaperMetric label="Virtual equity" value={money(metrics.equity)} change={metrics.total_return_pct} />
-            <PaperMetric label="Net result" value={signedMoney(metrics.realized_pnl + metrics.unrealized_pnl)} />
+            <PaperMetric label={extreme ? "Profit since signals" : "Net result"} value={signedMoney(metrics.realized_pnl + metrics.unrealized_pnl)} />
             <PaperMetric label="Open / closed" value={`${metrics.open_positions} / ${metrics.closed_trades}`} />
             <PaperMetric label="Win rate" value={`${metrics.win_rate.toFixed(1)}%`} />
             <PaperMetric label="Profit factor" value={metrics.profit_factor?.toFixed(2) ?? "--"} />
@@ -124,12 +129,12 @@ export function PaperTradingPanel({
               <div className="paper-subheading">
                 <div>
                   <strong>Simulation rules</strong>
-                  <span>Applied to every eligible directional signal</span>
+                  <span>{extreme ? "Applied only after RSI(1), MACD, and MA confirmation" : "Applied to every eligible directional signal"}</span>
                 </div>
               </div>
               <dl>
                 <div><dt>Market coverage</dt><dd>{engine.scanned_symbols || "--"} instruments</dd></div>
-                <div><dt>Entry filter</dt><dd>{engine.minimum_opportunity_score === 0 ? "All strategy signals" : `Score ${engine.minimum_opportunity_score}+`}</dd></div>
+                <div><dt>Entry filter</dt><dd>{extreme ? `Confirmed 85/15 · score ${engine.minimum_opportunity_score}+` : engine.minimum_opportunity_score === 0 ? "All strategy signals" : `Score ${engine.minimum_opportunity_score}+`}</dd></div>
                 <div><dt>Risk per trade</dt><dd>{engine.risk_per_trade_pct.toFixed(2)}%</dd></div>
                 <div><dt>Position limit</dt><dd>{engine.max_open_positions}</dd></div>
                 <div><dt>Cycle</dt><dd>{engine.timeframe} / {engine.cycle_interval_seconds}s</dd></div>
@@ -158,8 +163,8 @@ export function PaperTradingPanel({
                 <span>Minimum opportunity score <b>{engine.minimum_opportunity_score.toFixed(0)}</b></span>
                 <input
                   type="range"
-                  min="0"
-                  max="80"
+                  min={extreme ? "70" : "0"}
+                  max={extreme ? "100" : "80"}
                   step="5"
                   value={engine.minimum_opportunity_score}
                   disabled={busy}
@@ -201,9 +206,9 @@ export function PaperTradingPanel({
           </div>
 
           {tab === "open" && (
-            <OpenTrades trades={portfolio.open_positions} onClose={onClose} busy={busy} />
+            <OpenTrades trades={portfolio.open_positions} onClose={onClose} busy={busy} extreme={extreme} />
           )}
-          {tab === "history" && <TradeHistory trades={portfolio.closed_trades} />}
+          {tab === "history" && <TradeHistory trades={portfolio.closed_trades} extreme={extreme} />}
           {tab === "learning" && <LearningPanel learning={portfolio.learning} />}
           {tab === "log" && (
             <div className="decision-log">
@@ -275,21 +280,21 @@ function LearningPanel({ learning }: { learning: PaperPortfolio["learning"] }) {
   );
 }
 
-function OpenTrades({ trades, onClose, busy }: { trades: PaperTrade[]; onClose: (id: string) => void; busy: boolean }) {
+function OpenTrades({ trades, onClose, busy, extreme }: { trades: PaperTrade[]; onClose: (id: string) => void; busy: boolean; extreme: boolean }) {
   if (!trades.length) return <PaperEmpty text="No actionable signal is open. HOLD signals are observed but never entered." />;
   return (
     <div className="paper-table-wrap">
       <table className="paper-table">
-        <thead><tr><th>Market</th><th>Entry / current</th><th>Stop / target</th><th>Virtual size</th><th>Result</th><th>Signal</th><th>Opened</th><th /></tr></thead>
+        <thead><tr><th>Market</th><th>{extreme ? "Signal entry / now" : "Entry / current"}</th><th>Stop / target</th><th>Virtual size</th><th>Result</th><th>Signal</th><th>{extreme ? "Since signal" : "Opened"}</th><th /></tr></thead>
         <tbody>{trades.map((trade) => (
           <tr key={trade.id}>
             <td><strong>{trade.symbol}</strong><span className={`side ${trade.direction}`}>{trade.direction}</span></td>
-            <td>{price(trade.entry_price)}<span>{price(trade.current_price)}</span></td>
+            <td>{price(extreme ? trade.signal_price ?? trade.entry_price : trade.entry_price)}<span>{extreme ? `Fill ${price(trade.entry_price)}` : price(trade.current_price)}</span>{extreme && <small>Now {price(trade.current_price)}</small>}</td>
             <td>{price(trade.stop_loss)}<span>{price(trade.take_profit)}</span></td>
             <td>{trade.quantity.toPrecision(5)}<span>{money(trade.risk_amount)} risk</span></td>
             <td className={pnlClass(trade.unrealized_pnl)}><strong>{signedMoney(trade.unrealized_pnl)}</strong><span>{trade.r_multiple.toFixed(2)}R</span></td>
-            <td>{Math.round(trade.confidence * 100)}%<span title={trade.reasons.join(" ")}>Score {trade.opportunity_score.toFixed(1)}</span></td>
-            <td>{age(trade.opened_at)}<span>{time(trade.opened_at)}</span></td>
+            <td>{extreme && trade.signal_level ? <strong>{levelLabel(trade.signal_level)}</strong> : `${Math.round(trade.confidence * 100)}%`}<span title={trade.signal_recommendation ?? trade.reasons.join(" ")}>{extreme ? "Confirmed RSI + MACD + MA" : `Score ${trade.opportunity_score.toFixed(1)}`}</span></td>
+            <td>{age(signalTime(trade))}<span>{dateTime(signalTime(trade))}</span></td>
             <td><button className="icon-button compact-icon" title="Close virtual position" aria-label={`Close virtual ${trade.symbol} position`} disabled={busy} onClick={() => onClose(trade.id)}><CircleStop size={14} /></button></td>
           </tr>
         ))}</tbody>
@@ -298,21 +303,21 @@ function OpenTrades({ trades, onClose, busy }: { trades: PaperTrade[]; onClose: 
   );
 }
 
-function TradeHistory({ trades }: { trades: PaperTrade[] }) {
+function TradeHistory({ trades, extreme }: { trades: PaperTrade[]; extreme: boolean }) {
   if (!trades.length) return <PaperEmpty text="Completed virtual trades will appear here with their full result." />;
   return (
     <div className="paper-table-wrap">
       <table className="paper-table history-table">
-        <thead><tr><th>Market</th><th>Entry / exit</th><th>Net result</th><th>Excursion</th><th>Costs</th><th>Exit</th><th>Duration</th></tr></thead>
+        <thead><tr><th>Market</th><th>{extreme ? "Signal / fill / exit" : "Entry / exit"}</th><th>Net result</th><th>Excursion</th><th>Costs</th><th>Exit</th><th>Duration</th></tr></thead>
         <tbody>{trades.map((trade) => (
           <tr key={trade.id}>
             <td><strong>{trade.symbol}</strong><span className={`side ${trade.direction}`}>{trade.direction}</span></td>
-            <td>{price(trade.entry_price)}<span>{price(trade.exit_price)}</span></td>
+            <td>{extreme && trade.signal_level ? levelLabel(trade.signal_level) : price(trade.entry_price)}<span>{extreme ? `${price(trade.signal_price ?? trade.entry_price)} fill ${price(trade.entry_price)}` : price(trade.exit_price)}</span>{extreme && <small>Exit {price(trade.exit_price)}</small>}</td>
             <td className={pnlClass(trade.net_pnl)}><strong>{signedMoney(trade.net_pnl)}</strong><span>{trade.r_multiple.toFixed(2)}R / {trade.return_pct.toFixed(3)}%</span></td>
             <td>{signedMoney(trade.max_favorable_excursion)}<span>{signedMoney(trade.max_adverse_excursion)}</span></td>
             <td>{money(trade.entry_fee + trade.exit_fee)}<span>virtual fees</span></td>
             <td>{exitLabel(trade.exit_reason)}<span>{trade.closed_at ? dateTime(trade.closed_at) : "--"}</span></td>
-            <td>{duration(trade.opened_at, trade.closed_at)}<span title={trade.reasons.join(" ")}>Score {trade.opportunity_score.toFixed(1)}</span></td>
+            <td>{duration(signalTime(trade), trade.closed_at)}<span title={trade.signal_recommendation ?? trade.reasons.join(" ")}>{extreme ? `${dateTime(signalTime(trade))} signal` : `Score ${trade.opportunity_score.toFixed(1)}`}</span></td>
           </tr>
         ))}</tbody>
       </table>
@@ -401,11 +406,11 @@ function PaperEmpty({ text }: { text: string }) {
   return <div className="paper-empty"><Activity size={16} /><span>{text}</span></div>;
 }
 
-function cycleSummary(portfolio?: PaperPortfolio) {
+function cycleSummary(portfolio?: PaperPortfolio, extreme = false) {
   const engine = portfolio?.engine;
   if (!engine) return "Loading the virtual portfolio.";
   if (!engine.last_cycle_at) return "The first whole-market simulation cycle is waiting to run.";
-  return `${engine.scanned_symbols} scanned, ${engine.eligible_candidates} actionable, ${engine.opened_last_cycle} opened and ${engine.closed_last_cycle} closed in the last cycle.`;
+  return `${engine.scanned_symbols} scanned, ${engine.eligible_candidates} confirmed, ${engine.opened_last_cycle} opened and ${engine.closed_last_cycle} closed in the last cycle${extreme ? " from threshold signals" : ""}.`;
 }
 
 const moneyFormatter = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
@@ -418,3 +423,5 @@ function dateTime(value: string) { return new Intl.DateTimeFormat(undefined, { m
 function age(value: string) { const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); return seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m` : `${Math.floor(seconds / 3600)}h`; }
 function duration(start: string, end: string | null) { if (!end) return age(start); const seconds = Math.max(0, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 1000)); return seconds < 3600 ? `${Math.max(1, Math.floor(seconds / 60))}m` : `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m`; }
 function exitLabel(reason: PaperTrade["exit_reason"]) { return reason ? reason.replaceAll("_", " ") : "--"; }
+function signalTime(trade: PaperTrade) { return trade.signal_at ?? trade.opened_at; }
+function levelLabel(level: string) { return level === "upper_85" ? "85.00 / sell" : level === "lower_15" ? "15.00 / buy" : level; }

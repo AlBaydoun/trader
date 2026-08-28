@@ -14,6 +14,8 @@ This project is **not** a profit guarantee and does not ship with live trading e
 - Persistent virtual trading ledger that opens, marks, closes, and reports every eligible paper
   position with entry, exit, fees, risk, R-multiple, MFE/MAE, equity, decision history, and
   paper-only learning from closed-trade outcomes.
+- Separate persistent Extreme Virtual Trading ledger for confirmed RSI(1) 85/15 plus MACD/MA
+  entries, including signal-time price, modeled fill, live virtual P/L, exit result, and learning.
 - MT5/JustMarkets integration boundary with a disabled-by-default adapter contract.
 - Persistent multi-account profiles with masked logins and an in-workstation account selector.
 - Windows MT5 read-only bridge for verified account metrics, broker quotes, and open positions.

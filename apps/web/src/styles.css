@@ -2056,6 +2056,13 @@ button:disabled {
   font-size: 9px;
 }
 
+.paper-table td > small {
+  display: block;
+  margin-top: 3px;
+  color: #697785;
+  font-size: 8px;
+}
+
 .paper-table .side {
   width: max-content;
   padding: 2px 4px;

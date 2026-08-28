@@ -25,6 +25,9 @@ Trader is designed as an operator-controlled workstation. It supports market sca
   slippage and commission, closes positions on stop, target, reversal, time limit, or operator
   action, exposes detailed equity and decision history, and records a conservative paper-only
   factor reliability overlay from closed outcomes. Saves are atomic and keep a recovery copy.
+- **Extreme paper trading service**: Converts confirmed 85/15 alerts into a second persistent
+  paper-only ledger. It shares the execution lifecycle and cost model but keeps its balance,
+  positions, results, and learning history separate from broad-market paper trading.
 - **Risk engine**: Server-side order gate enforcing stop losses, max risk per trade, max daily loss, max open positions, and symbol exposure.
 - **Broker adapters**: Paper broker is enabled by default. MT5/JustMarkets is represented as an adapter boundary and remains locked until explicit live settings are supplied.
 - **Observability**: Prometheus metrics plus Docker Compose hooks for Grafana.
@@ -38,7 +41,8 @@ Trader is designed as an operator-controlled workstation. It supports market sca
 5. The broker-wide scanner independently ranks all available instruments, even when they are not
    open as charts.
 6. UI displays charts, reasons, strategy definition, news analysis, market ranking, and alert hooks.
-7. The paper loop can process eligible signals into the virtual ledger; no MT5 order function is called.
+7. The paper loop can process eligible signals into the broad virtual ledger, while the extreme loop
+   can process confirmed 85/15 signals into its separate virtual ledger; no MT5 order function is called.
 8. If auto mode is selected for a live integration, any order request still passes through the API risk engine and broker safety locks.
 
 ## Extensibility

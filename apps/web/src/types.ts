@@ -273,6 +273,10 @@ export interface PaperTrade {
   factor_categories: string[];
   learning_adjustment: number;
   learned_score: number;
+  signal_at: string | null;
+  signal_price: number | null;
+  signal_level: string | null;
+  signal_recommendation: string | null;
 }
 
 export interface PaperDecision {

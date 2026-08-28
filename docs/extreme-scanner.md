@@ -52,8 +52,31 @@ EXTREME_SCAN_CACHE_SECONDS=10
 EXTREME_SCAN_INTERVAL_SECONDS=15
 EXTREME_ALERT_COOLDOWN_SECONDS=300
 MARKET_SCAN_MAX_SYMBOLS=500
+
+EXTREME_PAPER_AUTO_ENABLED=true
+EXTREME_PAPER_STATE_FILE=../../data/extreme-paper-trading.json
+EXTREME_PAPER_STARTING_BALANCE=10000
+EXTREME_PAPER_RISK_PER_TRADE_PCT=0.1
+EXTREME_PAPER_MAX_OPEN_POSITIONS=20
+EXTREME_PAPER_MIN_OPPORTUNITY_SCORE=70
+EXTREME_PAPER_CONFIRMED_ONLY=true
+EXTREME_PAPER_MAX_POSITION_MINUTES=240
 ```
 
 Keep the MT5 terminal logged into the selected account and let the read-only bridge provide quotes
 and candles. If the terminal is disconnected, the panel reports that verified MT5 data is not
 available instead of fabricating live readings.
+
+## Extreme Virtual Trading
+
+The separate `Extreme Virtual Trading` panel feeds only confirmed threshold alerts into its own
+persistent paper ledger. Upper `85.00` alerts become virtual sell candidates when MACD is below
+zero and the fast moving average is below the slow average. Lower `15.00` alerts become virtual buy
+candidates when both confirmations point upward. The default risk budget is `0.1%` per trade and
+the default target is 1.5 times the modeled ATR-based risk distance.
+
+Each trade preserves the threshold level, signal time, signal price, simulated fill, stop, target,
+current mark-to-market P/L, costs, exit reason, and closed result. The separate ledger is intended
+to answer "what would this scanner have made since the signal?" while keeping the broader market
+paper account independent. It never submits an MT5 order. A high historical win rate still cannot
+guarantee future performance, especially with RSI(1) on fast timeframes.

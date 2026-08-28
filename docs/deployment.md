@@ -28,8 +28,10 @@ docker compose up --build -d
 ```
 
 Use paper trading first. Confirm `/status` reports `live_trading_unlocked: false` unless you intentionally enabled live mode.
-Keep `data/paper-trading.json` and its `.bak` file on persistent storage; they contain the virtual
-trade history, equity curve, decision log, and paper-learning profile.
+Keep `data/paper-trading.json`, `data/extreme-paper-trading.json`, and their `.bak` files on persistent
+storage. They contain the regular and extreme virtual trade histories, equity curves, decision logs,
+and paper-learning profiles. The extreme scanner can continue marking open virtual trades after a
+restart because its ledger is independent and persisted on the API host.
 
 ## Production Notes
 
