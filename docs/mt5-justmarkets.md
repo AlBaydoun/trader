@@ -81,6 +81,27 @@ is written to `FILE_COMMON` as `TraderAI-mt5-paper-signals.csv` when a new confi
 The indicator is intentionally separate from `TraderCalendarBridge`; attach both to a chart when
 you want calendar export and chart signals at the same time.
 
+## Multi-timeframe Trend Indicator
+
+`integrations/mt5/TraderAI_MultiTimeframeTrend.mq5` is a second, reusable chart indicator for
+trend-continuation setups on M5, M15, M30, H1, H4, and D1 charts. Attach it to the chart whose
+timeframe you want to analyze; its default `AnalysisTimeframe=PERIOD_CURRENT` follows that chart.
+You can instead choose a fixed analysis timeframe in the Inputs tab when you want several charts
+to share the same signal timeframe.
+
+The default confirmation stack combines EMA 20/50 direction, RSI(14), MACD(12/26/9), ADX(14),
+and a completed H4 directional bias. It draws historical BUY and SELL arrows only after a candle
+closes, shows the current PAPER ONLY status and the reason for WAIT, and estimates an ATR-based
+stop and target for review. These are confirmation rules, not a promise of profitable results;
+WAIT is expected when the filters disagree or market conditions are weak.
+
+Copy the file into `MQL5/Indicators/TraderAI`, compile it in MetaEditor, refresh Navigator, and
+attach **TraderAI_MultiTimeframeTrend** to each chart/timeframe you want to review. The indicator
+does not contain order-placement calls. Its optional common-file log is
+`TraderAI-mt5-trend-signals.csv`, and terminal/sound alerts are enabled by default while push
+alerts are disabled. Use the chart's normal history controls to inspect earlier arrows and adjust
+the inputs for a different instrument or trading horizon.
+
 ### Historical indicator testing
 
 The workstation's `10/90 indicator history` section is a separate historical simulation of the
