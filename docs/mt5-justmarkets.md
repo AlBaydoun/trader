@@ -48,8 +48,15 @@ functions. `integrations/mt5/TraderCalendarBridge.mq5` is therefore a separate, 
 Advisor that exports scheduled USD calendar events to the MT5 common-files directory every minute.
 It contains no order placement code.
 
-Compile the file in MetaEditor, place the compiled program under `MQL5/Experts/TraderAI`, and attach
-`TraderCalendarBridge` to one chart. The API automatically reads:
+The repository contains the source file only; it is not automatically installed in every MT5 data
+profile. In the active MT5 terminal, use `File -> Open Data Folder`, open `MQL5/Experts`, and copy
+`TraderCalendarBridge.mq5` there. You may create an optional `TraderAI` subfolder, but `TraderAI`
+is a folder name, not the Expert Advisor name. Open the file in MetaEditor, press `F7` to compile,
+return to MT5, right-click `Navigator -> Expert Advisors`, choose `Refresh`, and attach the
+Expert Advisor named **TraderCalendarBridge** to one chart. If it does not appear, confirm that
+MetaEditor opened the same data folder as the running terminal and refresh the Navigator again.
+
+The API automatically reads:
 
 ```text
 %APPDATA%\MetaQuotes\Terminal\Common\Files\TraderAI-calendar.csv
