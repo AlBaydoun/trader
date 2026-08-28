@@ -8,12 +8,27 @@
 4. Start the scanner.
 5. Watch API health, scanner logs, and Prometheus metrics.
 
+On Windows, start the local workstation with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\windows\start-trader.ps1 -OpenBrowser
+```
+
+Check it with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\ops\windows\status-trader.ps1
+```
+
 ## Incident Response
 
 - If alerts become noisy, switch the UI to signal-only mode and disable voice.
 - If drawdown approaches the daily limit, stop auto execution and review logs.
 - If broker rejects orders, verify symbol suffix, market session, min volume, margin, and stop distance.
 - If data feed stalls, block order placement and fail closed.
+- If the website cannot be reached on `http://127.0.0.1:5173/`, check status and rerun the Windows
+  start script. A reboot, closed terminal, Windows sleep, or killed background process can stop the
+  local development servers.
 
 ## Observability
 
