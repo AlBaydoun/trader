@@ -7,6 +7,7 @@ import {
 import { ExtremeAlertsPanel } from "./components/ExtremeAlertsPanel";
 import { PaperTradingPanel } from "./components/PaperTradingPanel";
 import { SignalRail } from "./components/SignalRail";
+import { StrategyLabPanel } from "./components/StrategyLabPanel";
 import { SymbolDrawer } from "./components/SymbolDrawer";
 import { WorkspaceHeader } from "./components/WorkspaceHeader";
 import {
@@ -17,6 +18,7 @@ import {
   getMarketSymbols,
   getNewsAnalysis,
   getExtremePaperPortfolio,
+  getStrategyLab,
   getPaperPortfolio,
   scanExtremeLevels,
   getStatus,
@@ -29,8 +31,10 @@ import {
   resetExtremePaperPortfolio,
   resetPaperPortfolio,
   runExtremePaperCycle,
+  runStrategyLabCycle,
   runPaperCycle,
   updateExtremePaperControl,
+  updateStrategyLabControl,
   updatePaperControl
 } from "./lib/api";
 import { playExtremeAlert, playSignalTone, speakExtremeAlert, speakSignal } from "./lib/alerts";
@@ -46,6 +50,7 @@ import type {
   PaperControl,
   PaperPortfolio,
   ExtremeScan,
+  StrategyLabSnapshot,
   Signal,
   Status,
   StrategyDefinition,
@@ -84,6 +89,9 @@ export function App() {
   const [extremePaperPortfolio, setExtremePaperPortfolio] = useState<PaperPortfolio>();
   const [extremePaperBusy, setExtremePaperBusy] = useState(false);
   const [extremePaperError, setExtremePaperError] = useState("");
+  const [strategyLab, setStrategyLab] = useState<StrategyLabSnapshot>();
+  const [strategyLabBusy, setStrategyLabBusy] = useState(false);
+  const [strategyLabError, setStrategyLabError] = useState("");
   const [extremeScan, setExtremeScan] = useState<ExtremeScan>();
   const [extremeBusy, setExtremeBusy] = useState(false);
   const extremeAlertIdsRef = useRef<Set<string>>(new Set());
@@ -151,6 +159,17 @@ export function App() {
     const interval = window.setInterval(() => void refreshExtremePaper(), 10000);
     return () => window.clearInterval(interval);
   }, [refreshExtremePaper]);
+
+  const refreshStrategyLab = useCallback(async () => {
+    const snapshot = await getStrategyLab().catch(() => null);
+    if (snapshot) setStrategyLab(snapshot);
+  }, []);
+
+  useEffect(() => {
+    void refreshStrategyLab();
+    const interval = window.setInterval(() => void refreshStrategyLab(), 10000);
+    return () => window.clearInterval(interval);
+  }, [refreshStrategyLab]);
 
   const refreshMarket = useCallback(async () => {
     setMarketScanning(true);
@@ -398,6 +417,30 @@ export function App() {
     }
   }
 
+  async function runStrategyLabCycleNow() {
+    setStrategyLabBusy(true);
+    setStrategyLabError("");
+    try {
+      setStrategyLab(await runStrategyLabCycle(true));
+    } catch (error) {
+      setStrategyLabError(error instanceof Error ? error.message : "Strategy lab cycle failed.");
+    } finally {
+      setStrategyLabBusy(false);
+    }
+  }
+
+  async function controlStrategyLab(strategyId: string, control: PaperControl) {
+    setStrategyLabBusy(true);
+    setStrategyLabError("");
+    try {
+      setStrategyLab(await updateStrategyLabControl(strategyId, control));
+    } catch (error) {
+      setStrategyLabError(error instanceof Error ? error.message : "Strategy lab control failed.");
+    } finally {
+      setStrategyLabBusy(false);
+    }
+  }
+
   async function closeExtremeVirtualPosition(tradeId: string) {
     setExtremePaperBusy(true);
     setExtremePaperError("");
@@ -557,6 +600,13 @@ export function App() {
         onUpper85NotificationsToggle={(enabled) => setExtremeNotifications((current) => ({ ...current, upper85: enabled }))}
         onLower15NotificationsToggle={(enabled) => setExtremeNotifications((current) => ({ ...current, lower15: enabled }))}
         onRun={() => void runExtremeScan()}
+      />
+      <StrategyLabPanel
+        snapshot={strategyLab}
+        busy={strategyLabBusy}
+        error={strategyLabError}
+        onRun={() => void runStrategyLabCycleNow()}
+        onControl={(strategyId, control) => void controlStrategyLab(strategyId, control)}
       />
       <PaperTradingPanel
         variant="extreme"

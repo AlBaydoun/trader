@@ -12,7 +12,8 @@ import type {
   PaperPortfolio,
   ScanResponse,
   Status,
-  StrategyDefinition
+  StrategyDefinition,
+  StrategyLabSnapshot
 } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
@@ -103,6 +104,10 @@ export function getExtremePaperPortfolio(): Promise<PaperPortfolio> {
   return getJson<PaperPortfolio>("/paper/extreme/portfolio");
 }
 
+export function getStrategyLab(): Promise<StrategyLabSnapshot> {
+  return getJson<StrategyLabSnapshot>("/paper/strategies");
+}
+
 export function scanExtremeLevels(timeframe: string, force = false): Promise<ExtremeScan> {
   return getJson<ExtremeScan>(
     `/extreme/scan?timeframe=${timeframe}&limit=50&force=${force ? "true" : "false"}`
@@ -123,6 +128,20 @@ export function runPaperCycle(force = true): Promise<PaperPortfolio> {
 
 export function runExtremePaperCycle(force = true): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>(`/paper/extreme/cycle?force=${force ? "true" : "false"}`);
+}
+
+export function runStrategyLabCycle(force = true): Promise<StrategyLabSnapshot> {
+  return sendJson<StrategyLabSnapshot>(`/paper/strategies/cycle?force=${force ? "true" : "false"}`);
+}
+
+export function updateStrategyLabControl(
+  strategyId: string,
+  control: PaperControl
+): Promise<StrategyLabSnapshot> {
+  return sendJson<StrategyLabSnapshot>(
+    `/paper/strategies/${encodeURIComponent(strategyId)}/control`,
+    control
+  );
 }
 
 export function closePaperPosition(tradeId: string): Promise<PaperPortfolio> {

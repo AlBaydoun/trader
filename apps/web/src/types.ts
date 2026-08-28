@@ -406,6 +406,12 @@ export interface ExtremeReading {
   reasons: string[];
   source: string;
   detected_at: string;
+  rsi3: number;
+  rsi7: number;
+  momentum_pct: number;
+  candle_direction: string;
+  atr_pct: number;
+  reversal_confirmed: boolean;
 }
 
 export interface ExtremeAlert {
@@ -422,6 +428,12 @@ export interface ExtremeAlert {
   reasons: string[];
   triggered_at: string;
   source: string;
+  rsi3: number;
+  rsi7: number;
+  momentum_pct: number;
+  candle_direction: string;
+  atr_pct: number;
+  reversal_confirmed: boolean;
 }
 
 export interface ExtremeScan {
@@ -435,5 +447,29 @@ export interface ExtremeScan {
   readings: ExtremeReading[];
   alerts: ExtremeAlert[];
   recent_alerts: ExtremeAlert[];
+  disclaimer: string;
+}
+
+export interface StrategyLabMember {
+  id: string;
+  name: string;
+  summary: string;
+  upper_level: number;
+  lower_level: number;
+  target_r: number;
+  stop_atr: number;
+  max_minutes: number;
+  criteria: string[];
+  candidates_last_cycle: number;
+  portfolio: PaperPortfolio;
+}
+
+export interface StrategyLabSnapshot {
+  source: string;
+  timeframe: string;
+  generated_at: string;
+  leader_strategy_id: string | null;
+  strategies: StrategyLabMember[];
+  main_lessons: string[];
   disclaimer: string;
 }

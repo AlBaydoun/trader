@@ -441,6 +441,12 @@ class ExtremeReadingDTO(APIModel):
     reasons: list[str]
     source: str
     detected_at: datetime
+    rsi3: float = 50.0
+    rsi7: float = 50.0
+    momentum_pct: float = 0.0
+    candle_direction: str = "neutral"
+    atr_pct: float = 0.0
+    reversal_confirmed: bool = False
 
 
 class ExtremeAlertDTO(APIModel):
@@ -457,6 +463,12 @@ class ExtremeAlertDTO(APIModel):
     reasons: list[str]
     triggered_at: datetime
     source: str
+    rsi3: float = 50.0
+    rsi7: float = 50.0
+    momentum_pct: float = 0.0
+    candle_direction: str = "neutral"
+    atr_pct: float = 0.0
+    reversal_confirmed: bool = False
 
 
 class ExtremeScanDTO(APIModel):
@@ -470,6 +482,30 @@ class ExtremeScanDTO(APIModel):
     readings: list[ExtremeReadingDTO]
     alerts: list[ExtremeAlertDTO]
     recent_alerts: list[ExtremeAlertDTO]
+    disclaimer: str
+
+
+class StrategyLabMemberDTO(APIModel):
+    id: str
+    name: str
+    summary: str
+    upper_level: float
+    lower_level: float
+    target_r: float
+    stop_atr: float
+    max_minutes: int
+    criteria: list[str]
+    candidates_last_cycle: int
+    portfolio: PaperPortfolioDTO
+
+
+class StrategyLabDTO(APIModel):
+    source: str
+    timeframe: str
+    generated_at: datetime
+    leader_strategy_id: str | None
+    strategies: list[StrategyLabMemberDTO]
+    main_lessons: list[str]
     disclaimer: str
 
 

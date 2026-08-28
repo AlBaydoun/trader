@@ -25,6 +25,12 @@ class ExtremeReading:
     reasons: list[str]
     source: str
     detected_at: datetime
+    rsi3: float = 50.0
+    rsi7: float = 50.0
+    momentum_pct: float = 0.0
+    candle_direction: str = "neutral"
+    atr_pct: float = 0.0
+    reversal_confirmed: bool = False
 
 
 @dataclass(frozen=True)
@@ -42,6 +48,12 @@ class ExtremeAlert:
     reasons: list[str]
     triggered_at: datetime
     source: str
+    rsi3: float = 50.0
+    rsi7: float = 50.0
+    momentum_pct: float = 0.0
+    candle_direction: str = "neutral"
+    atr_pct: float = 0.0
+    reversal_confirmed: bool = False
 
 
 @dataclass(frozen=True)
@@ -144,8 +156,9 @@ class ExtremeSignalScanner:
         closes = [candle.close for candle in candles]
         ema_fast = self._ema(closes, 5)
         ema_slow = self._ema(closes, 6)
-        macd = ema_fast - ema_slow
-        macd_signal = macd
+        macd_values = self._macd_values(closes, 5, 6)
+        macd = macd_values[-1]
+        macd_signal = self._ema(macd_values, 3)
         macd_histogram = macd - macd_signal
         atr = self._atr(candles[-15:])
         macd_bias = 50.0 + 50.0 * tanh((macd / atr) * 3.0) if atr else 50.0
@@ -163,7 +176,28 @@ class ExtremeSignalScanner:
             min(100.0, rsi1 * 0.9 + reversal_macd_bias * 0.05 + reversal_trend_bias * 0.05),
         )
         level = self._level(score)
-        recommendation, reasons = self._recommendation(level, rsi1, macd, ema_fast, ema_slow, atr)
+        rsi3 = self._rsi(closes, 3)
+        rsi7 = self._rsi(closes, 7)
+        momentum_pct = self._momentum_pct(closes, 4)
+        candle_direction = self._candle_direction(candles[-1])
+        reversal_confirmed = (
+            (level == "upper_85" and candle_direction == "bearish" and rsi3 < 80)
+            or (level == "lower_15" and candle_direction == "bullish" and rsi3 > 20)
+        )
+        recommendation, reasons = self._recommendation(
+            level,
+            rsi1,
+            rsi3,
+            rsi7,
+            macd,
+            macd_signal,
+            macd_histogram,
+            ema_fast,
+            ema_slow,
+            atr,
+            candle_direction,
+            reversal_confirmed,
+        )
         return ExtremeReading(
             symbol=symbol,
             price=closes[-1],
@@ -179,6 +213,12 @@ class ExtremeSignalScanner:
             reasons=reasons,
             source=candles[-1].source,
             detected_at=candles[-1].ts,
+            rsi3=round(rsi3, 2),
+            rsi7=round(rsi7, 2),
+            momentum_pct=round(momentum_pct, 4),
+            candle_direction=candle_direction,
+            atr_pct=round(atr / closes[-1] * 100, 4) if closes[-1] else 0.0,
+            reversal_confirmed=reversal_confirmed,
         )
 
     def _threshold_alert(self, reading: ExtremeReading) -> ExtremeAlert | None:
@@ -206,30 +246,46 @@ class ExtremeSignalScanner:
             reasons=reading.reasons,
             triggered_at=now,
             source=reading.source,
+            rsi3=reading.rsi3,
+            rsi7=reading.rsi7,
+            momentum_pct=reading.momentum_pct,
+            candle_direction=reading.candle_direction,
+            atr_pct=reading.atr_pct,
+            reversal_confirmed=reading.reversal_confirmed,
         )
 
     def _recommendation(
         self,
         level: str,
         rsi1: float,
+        rsi3: float,
+        rsi7: float,
         macd: float,
+        macd_signal: float,
+        macd_histogram: float,
         ema_fast: float,
         ema_slow: float,
         atr: float,
+        candle_direction: str,
+        reversal_confirmed: bool,
     ) -> tuple[str, list[str]]:
         if level == "upper_85":
-            confirmed = macd < 0 and ema_fast < ema_slow
+            confirmed = reversal_confirmed and macd_histogram < 0
             recommendation = (
-                "Reversal sell watch: MACD and MA confirm weakness."
+                "Scalp sell candidate: 85/15 extreme plus a bearish rejection and "
+                "falling MACD histogram."
                 if confirmed
-                else "Overbought watch: wait for MACD/MA reversal before selling."
+                else "Overbought setup: wait for a bearish rejection and falling "
+                "MACD histogram before selling."
             )
         elif level == "lower_15":
-            confirmed = macd > 0 and ema_fast > ema_slow
+            confirmed = reversal_confirmed and macd_histogram > 0
             recommendation = (
-                "Reversal buy watch: MACD and MA confirm recovery."
+                "Scalp buy candidate: 85/15 extreme plus a bullish rejection and "
+                "rising MACD histogram."
                 if confirmed
-                else "Oversold watch: wait for MACD/MA recovery before buying."
+                else "Oversold setup: wait for a bullish rejection and rising "
+                "MACD histogram before buying."
             )
         else:
             recommendation = "No extreme-level action."
@@ -241,10 +297,17 @@ class ExtremeSignalScanner:
                 f"and {self.lower_level:.2f}."
             ),
             (
-                f"MACD(5,6,1) is {macd_state} zero at {macd:.8g}; period-1 signal "
-                f"makes the histogram {0.0:.8g}."
+                f"MACD(5,6,3) is {macd_state} zero at {macd:.8g}; signal is "
+                f"{macd_signal:.8g} and histogram is {macd_histogram:.8g}."
             ),
-            f"Fast moving average is {ma_state} the slow moving average; ATR context is {atr:.8g}.",
+            (
+                f"RSI(3) is {rsi3:.2f} and RSI(7) is {rsi7:.2f}; the latest candle is "
+                f"{candle_direction}."
+            ),
+            (
+                f"Fast moving average is {ma_state} the slow moving average; ATR context is "
+                f"{atr:.8g}. Reversal trigger: {'confirmed' if reversal_confirmed else 'waiting'}."
+            ),
         ]
         return recommendation, reasons
 
@@ -265,6 +328,49 @@ class ExtremeSignalScanner:
         if change < 0:
             return 0.0
         return 50.0
+
+    @staticmethod
+    def _rsi(closes: list[float], period: int) -> float:
+        if len(closes) < period + 1:
+            return 50.0
+        changes = [closes[index] - closes[index - 1] for index in range(1, len(closes))]
+        window = changes[-period:]
+        gains = sum(change for change in window if change > 0) / period
+        losses = sum(-change for change in window if change < 0) / period
+        if losses == 0:
+            return 100.0 if gains > 0 else 50.0
+        if gains == 0:
+            return 0.0
+        relative_strength = gains / losses
+        return 100.0 - (100.0 / (1.0 + relative_strength))
+
+    @staticmethod
+    def _momentum_pct(closes: list[float], lookback: int) -> float:
+        if len(closes) <= lookback or closes[-lookback - 1] == 0:
+            return 0.0
+        return (closes[-1] - closes[-lookback - 1]) / closes[-lookback - 1] * 100
+
+    @staticmethod
+    def _candle_direction(candle: Candle) -> str:
+        if candle.close > candle.open:
+            return "bullish"
+        if candle.close < candle.open:
+            return "bearish"
+        return "neutral"
+
+    @staticmethod
+    def _macd_values(closes: list[float], fast_period: int, slow_period: int) -> list[float]:
+        if not closes:
+            return [0.0]
+        fast_multiplier = 2 / (fast_period + 1)
+        slow_multiplier = 2 / (slow_period + 1)
+        fast = slow = closes[0]
+        values = [0.0]
+        for close in closes[1:]:
+            fast = (close - fast) * fast_multiplier + fast
+            slow = (close - slow) * slow_multiplier + slow
+            values.append(fast - slow)
+        return values
 
     @staticmethod
     def _ema(values: list[float], period: int) -> float:

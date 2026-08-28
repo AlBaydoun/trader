@@ -44,6 +44,15 @@ class Settings(BaseSettings):
     extreme_paper_confirmed_only: bool = True
     extreme_paper_max_position_minutes: int = Field(default=240, ge=1, le=43200)
 
+    strategy_lab_enabled: bool = True
+    strategy_lab_state_dir: str = "../../data/strategy-lab"
+    strategy_lab_starting_balance: float = Field(default=10000.0, gt=0)
+    strategy_lab_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
+    strategy_lab_max_open_positions: int = Field(default=10, ge=1, le=200)
+    strategy_lab_cycle_interval_seconds: int = Field(default=15, ge=10, le=3600)
+    strategy_lab_adaptive_learning_enabled: bool = True
+    strategy_lab_learning_min_samples: int = Field(default=8, ge=3, le=1000)
+
     extreme_scan_enabled: bool = True
     extreme_scan_cache_seconds: int = Field(default=10, ge=5, le=300)
     extreme_scan_interval_seconds: int = Field(default=15, ge=10, le=3600)

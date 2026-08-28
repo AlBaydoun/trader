@@ -36,7 +36,7 @@ export function ExtremeAlertsPanel({
           <span className="extreme-title-icon"><BellRing size={18} /></span>
           <div>
             <h2>85 / 15 Extreme Scanner</h2>
-            <span>RSI(1) + MACD(5,6,1) + moving-average confirmation</span>
+            <span>RSI(1) + short MACD histogram + moving-average confirmation</span>
           </div>
         </div>
         <div className="extreme-actions">

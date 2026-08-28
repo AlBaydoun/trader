@@ -41,6 +41,7 @@ from app.schemas import (
     SignalDTO,
     StatusDTO,
     StrategyDTO,
+    StrategyLabDTO,
 )
 from app.services.accounts import AccountRegistry, BrokerAccountProfile
 from app.services.backtest import BacktestService
@@ -54,6 +55,7 @@ from app.services.paper_trading import PaperPortfolio, PaperTradingService
 from app.services.risk import RiskEngine
 from app.services.scanner import ScannerService
 from app.services.strategy import SignalEngine
+from app.services.strategy_lab import STRATEGY_PROFILES, ScalpStrategyLabService, StrategyLabMember
 
 settings = get_settings()
 market_data = MarketDataService()
@@ -125,6 +127,33 @@ extreme_paper_trader = ExtremePaperTradingService(
     ),
     mt5_bridge,
     confirmed_only=settings.extreme_paper_confirmed_only,
+)
+strategy_lab = ScalpStrategyLabService(
+    [
+        StrategyLabMember(
+            profile=profile,
+            executor=ExtremePaperTradingService(
+                PaperTradingService(
+                    f"{settings.strategy_lab_state_dir}/{profile.id}.json",
+                    enabled=settings.strategy_lab_enabled,
+                    starting_balance=settings.strategy_lab_starting_balance,
+                    risk_per_trade_pct=settings.strategy_lab_risk_per_trade_pct,
+                    max_open_positions=settings.strategy_lab_max_open_positions,
+                    minimum_opportunity_score=0.0,
+                    commission_bps=settings.paper_commission_bps,
+                    slippage_bps=settings.paper_slippage_bps,
+                    cycle_interval_seconds=settings.strategy_lab_cycle_interval_seconds,
+                    max_position_minutes=profile.max_minutes,
+                    adaptive_learning_enabled=settings.strategy_lab_adaptive_learning_enabled,
+                    learning_min_samples=settings.strategy_lab_learning_min_samples,
+                    trade_source=f"strategy-lab-{profile.id}",
+                ),
+                mt5_bridge,
+                confirmed_only=False,
+            ),
+        )
+        for profile in STRATEGY_PROFILES
+    ]
 )
 paper_cycle_lock = Lock()
 
@@ -235,6 +264,7 @@ def run_extreme_cycle(
         )
         if process_virtual_trades:
             extreme_paper_trader.process_scan(result, account)
+            strategy_lab.process_scan(result, account)
         return result
 
 
@@ -262,7 +292,7 @@ async def extreme_scanning_loop() -> None:
                 await asyncio.to_thread(
                     run_extreme_cycle,
                     False,
-                    extreme_paper_trader.enabled,
+                    extreme_paper_trader.enabled or strategy_lab.enabled,
                 )
         await asyncio.sleep(settings.extreme_scan_interval_seconds)
 
@@ -483,6 +513,11 @@ def extreme_paper_portfolio() -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(extreme_paper_trader.snapshot())
 
 
+@app.get("/paper/strategies", response_model=StrategyLabDTO)
+def paper_strategy_lab() -> StrategyLabDTO:
+    return StrategyLabDTO.model_validate(strategy_lab.snapshot())
+
+
 @app.post("/paper/control", response_model=PaperPortfolioDTO)
 def control_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
     portfolio = paper_trader.update_control(
@@ -513,6 +548,44 @@ def cycle_paper_trading(force: bool = Query(default=False)) -> PaperPortfolioDTO
 @app.post("/paper/extreme/cycle", response_model=PaperPortfolioDTO)
 def cycle_extreme_paper_trading(force: bool = Query(default=True)) -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(run_extreme_paper_cycle(force))
+
+
+@app.post("/paper/strategies/cycle", response_model=StrategyLabDTO)
+def cycle_paper_strategy_lab(force: bool = Query(default=True)) -> StrategyLabDTO:
+    run_extreme_cycle(force, process_virtual_trades=True)
+    return StrategyLabDTO.model_validate(strategy_lab.snapshot())
+
+
+@app.post("/paper/strategies/{strategy_id}/control", response_model=StrategyLabDTO)
+def control_paper_strategy(
+    strategy_id: str,
+    payload: PaperControlRequestDTO,
+) -> StrategyLabDTO:
+    try:
+        snapshot = strategy_lab.update_control(
+            strategy_id,
+            enabled=payload.enabled,
+            timeframe=payload.timeframe,
+            minimum_opportunity_score=payload.minimum_opportunity_score,
+            max_open_positions=payload.max_open_positions,
+        )
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Paper strategy was not found.") from error
+    return StrategyLabDTO.model_validate(snapshot)
+
+
+@app.post("/paper/strategies/{strategy_id}/reset", response_model=StrategyLabDTO)
+def reset_paper_strategy(
+    strategy_id: str,
+    payload: PaperResetRequestDTO,
+) -> StrategyLabDTO:
+    if payload.confirmation != "RESET PAPER ACCOUNT":
+        raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
+    try:
+        snapshot = strategy_lab.reset(strategy_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Paper strategy was not found.") from error
+    return StrategyLabDTO.model_validate(snapshot)
 
 
 @app.post("/paper/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
