@@ -987,7 +987,6 @@ button:disabled {
 }
 
 .news-state {
-  margin-left: auto;
   padding: 3px 6px;
   border-radius: 4px;
   color: #f4d57a;
@@ -1006,6 +1005,86 @@ button:disabled {
 .news-state.stale {
   color: #ff8ea0;
   background: rgba(255, 100, 124, 0.14);
+}
+
+.news-analysis {
+  padding: 0;
+  overflow: hidden;
+}
+
+.news-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: #dce5eb;
+  text-align: left;
+  cursor: pointer;
+}
+
+.news-toggle:hover,
+.news-toggle:focus-visible {
+  background: #171f25;
+  outline: none;
+}
+
+.news-toggle:focus-visible {
+  box-shadow: inset 0 0 0 2px #e7c766;
+}
+
+.news-toggle-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.news-toggle-title > svg {
+  flex: 0 0 auto;
+  color: #e7c766;
+}
+
+.news-toggle-title span {
+  display: grid;
+  gap: 2px;
+}
+
+.news-toggle-title strong {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.news-toggle-title small,
+.news-summary-count {
+  color: #8a98a6;
+  font-size: 10px;
+}
+
+.news-summary-count {
+  white-space: nowrap;
+}
+
+.news-toggle .news-state {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.news-toggle-chevron {
+  flex: 0 0 auto;
+  color: #8a98a6;
+  transition: transform 160ms ease;
+}
+
+.news-analysis.expanded .news-toggle-chevron {
+  transform: rotate(180deg);
+}
+
+.news-analysis-content {
+  padding: 0 12px 12px;
 }
 
 .news-tabs {

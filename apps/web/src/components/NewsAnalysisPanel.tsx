@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   CalendarClock,
+  ChevronDown,
   ExternalLink,
   Globe2,
   Newspaper,
@@ -18,6 +19,7 @@ interface NewsAnalysisPanelProps {
 
 export function NewsAnalysisPanel({ activeSymbol, events, status }: NewsAnalysisPanelProps) {
   const [view, setView] = useState<"global" | "symbol">("symbol");
+  const [expanded, setExpanded] = useState(false);
   const visibleEvents = useMemo(
     () =>
       view === "global"
@@ -27,10 +29,24 @@ export function NewsAnalysisPanel({ activeSymbol, events, status }: NewsAnalysis
   );
 
   return (
-    <section className="rail-block news-analysis">
-      <div className="section-heading">
-        <Newspaper size={17} />
-        <h2>News Analysis</h2>
+    <section className={`rail-block news-analysis ${expanded ? "expanded" : "collapsed"}`}>
+      <button
+        aria-controls="news-analysis-content"
+        aria-expanded={expanded}
+        className="news-toggle"
+        type="button"
+        onClick={() => setExpanded((open) => !open)}
+      >
+        <span className="news-toggle-title">
+          <Newspaper size={17} />
+          <span>
+            <strong>News Analysis</strong>
+            <small>AI context</small>
+          </span>
+        </span>
+        <span className="news-summary-count">
+          {events.length} {events.length === 1 ? "event" : "events"}
+        </span>
         <span className={`news-state ${status?.state ?? "config_required"}`}>
           {status?.state === "live"
             ? "Live calendar"
@@ -38,59 +54,64 @@ export function NewsAnalysisPanel({ activeSymbol, events, status }: NewsAnalysis
               ? "Stale"
               : "Source needed"}
         </span>
-      </div>
+        <ChevronDown className="news-toggle-chevron" size={16} />
+      </button>
 
-      <div className="segmented news-tabs" aria-label="News analysis scope">
-        <button
-          className={view === "global" ? "active" : ""}
-          type="button"
-          onClick={() => setView("global")}
-        >
-          <Globe2 size={14} />
-          Global
-        </button>
-        <button
-          className={view === "symbol" ? "active" : ""}
-          type="button"
-          onClick={() => setView("symbol")}
-        >
-          {activeSymbol}
-        </button>
-      </div>
-
-      {status && (
-        <div className={`news-source ${status.state}`}>
-          <strong>{status.provider}</strong>
-          <p>{status.message}</p>
-          <div className="coverage-row">
-            <span className={status.calendar_connected ? "covered" : "missing"}>Calendar</span>
-            <span className={status.headlines_connected ? "covered" : "missing"}>Headlines</span>
+      {expanded && (
+        <div className="news-analysis-content" id="news-analysis-content">
+          <div className="segmented news-tabs" aria-label="News analysis scope">
+            <button
+              className={view === "global" ? "active" : ""}
+              type="button"
+              onClick={() => setView("global")}
+            >
+              <Globe2 size={14} />
+              Global
+            </button>
+            <button
+              className={view === "symbol" ? "active" : ""}
+              type="button"
+              onClick={() => setView("symbol")}
+            >
+              {activeSymbol}
+            </button>
           </div>
-        </div>
-      )}
 
-      {visibleEvents.length ? (
-        <div className="news-event-list">
-          {visibleEvents.map((event) => (
-            <NewsEvent
-              activeSymbol={activeSymbol}
-              event={event}
-              global={view === "global"}
-              key={event.id}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="news-empty">
-          <AlertTriangle size={16} />
-          <div>
-            <strong>No verified events available</strong>
-            <p>
-              {view === "global"
-                ? "No global event analysis is available from the connected sources."
-                : `No verified news analysis is available for ${activeSymbol}.`}
-            </p>
-          </div>
+          {status && (
+            <div className={`news-source ${status.state}`}>
+              <strong>{status.provider}</strong>
+              <p>{status.message}</p>
+              <div className="coverage-row">
+                <span className={status.calendar_connected ? "covered" : "missing"}>Calendar</span>
+                <span className={status.headlines_connected ? "covered" : "missing"}>Headlines</span>
+              </div>
+            </div>
+          )}
+
+          {visibleEvents.length ? (
+            <div className="news-event-list">
+              {visibleEvents.map((event) => (
+                <NewsEvent
+                  activeSymbol={activeSymbol}
+                  event={event}
+                  global={view === "global"}
+                  key={event.id}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="news-empty">
+              <AlertTriangle size={16} />
+              <div>
+                <strong>No verified events available</strong>
+                <p>
+                  {view === "global"
+                    ? "No global event analysis is available from the connected sources."
+                    : `No verified news analysis is available for ${activeSymbol}.`}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </section>
