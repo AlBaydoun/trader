@@ -1,0 +1,45 @@
+# Architecture
+
+## Goals
+
+Trader is designed as an operator-controlled workstation. It supports market scanning, explainable signals, paper execution, backtesting, and broker integration points. The first version intentionally blocks live trading by default.
+
+## Components
+
+- **Web workstation**: React/Vite UI for Windows, Android, and large multi-monitor setups. Charts render with canvas so panels can resize and pop out into separate browser windows.
+- **API service**: FastAPI application exposing status, candles, scans, signals, backtests, positions, order placement, and metrics.
+- **Scanner worker**: Continuous loop that scans configured symbols and can later publish to Redis, websockets, email, mobile push, or voice channels.
+- **Strategy layer**: Deterministic signal engine combining trend, momentum, structure, volatility, and explicit reason objects.
+- **News analysis layer**: Converts verified economic-calendar inputs into global and per-symbol
+  scenarios, transmission chains, timing windows, confidence, and invalidation conditions. Missing
+  headline coverage is exposed rather than silently replaced with generated content.
+- **Market opportunity scanner**: Enumerates the active MT5 account's tradeable catalog, scans each
+  instrument, and ranks current setups. It penalizes spread cost, stale quotes, inactive sessions,
+  and weak directional conviction.
+- **Risk engine**: Server-side order gate enforcing stop losses, max risk per trade, max daily loss, max open positions, and symbol exposure.
+- **Broker adapters**: Paper broker is enabled by default. MT5/JustMarkets is represented as an adapter boundary and remains locked until explicit live settings are supplied.
+- **Observability**: Prometheus metrics plus Docker Compose hooks for Grafana.
+
+## Data Flow
+
+1. UI requests `/scan`.
+2. API loads market candles from the configured market data provider.
+3. Signal engine produces directional confidence and explainable reasons.
+4. News service attaches verified event analysis and source state.
+5. The broker-wide scanner independently ranks all available instruments, even when they are not
+   open as charts.
+6. UI displays charts, reasons, strategy definition, news analysis, market ranking, and alert hooks.
+7. If auto mode is selected, any order request still passes through the API risk engine and broker safety locks.
+
+## Extensibility
+
+Add new symbols in `services/api/app/domain/symbols.py` or through a future database-backed symbol registry. Add paid feeds by replacing `MarketDataService` with a provider implementation that preserves the `candles(symbol, timeframe, limit)` contract.
+
+Recommended paid data/news integrations to consider later:
+
+- TradingView-compatible charting/data vendor or broker market data feed.
+- Economic calendar feed with central bank, CPI, jobs, inventory, and geopolitical alerts.
+- Low-latency crypto market feed for BTCUSD.
+- Broker-side symbol metadata from the actual MT5 terminal before live execution.
+
+No external vendor is hard-coded because credentials, terms, latency, and symbol naming must be selected account by account.

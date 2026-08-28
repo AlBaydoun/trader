@@ -1,0 +1,91 @@
+from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    app_name: str = "Trader AI Workstation"
+    trading_mode: str = Field(default="paper", pattern="^(paper|live)$")
+    broker_adapter: str = Field(default="paper")
+    live_trading_enabled: bool = False
+    live_trading_acknowledgement: str = ""
+    live_trading_required_ack: str = "I understand live trading can lose money"
+
+    default_symbols: str = "XAUUSD,XAGUSD,BTCUSD,US100.std,US30.std,WTI.m,BRENT.m"
+    default_timeframe: str = "1m"
+    max_risk_per_trade_pct: float = 0.5
+    max_daily_loss_pct: float = 2.0
+    max_open_positions: int = 3
+    max_symbol_exposure_pct: float = 5.0
+    account_equity: float = 10000.0
+    market_scan_max_symbols: int = Field(default=500, ge=10, le=2000)
+    market_scan_cache_seconds: int = Field(default=300, ge=15, le=3600)
+
+    news_provider: str = "auto"
+    news_api_key: str = ""
+    mt5_calendar_file: str = ""
+    openai_api_key: str = ""
+
+    mt5_login: str = ""
+    mt5_password: str = ""
+    mt5_server: str = ""
+    mt5_account_type: str = ""
+    mt5_terminal_path: str = ""
+    mt5_accounts_file: str = ""
+    mt5_read_only_enabled: bool = True
+    mt5_timeout_ms: int = Field(default=10000, ge=1000, le=60000)
+
+    model_config = SettingsConfigDict(
+        env_file=(".env", "../../.env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    @property
+    def symbols(self) -> list[str]:
+        return [symbol.strip() for symbol in self.default_symbols.split(",") if symbol.strip()]
+
+    @property
+    def mt5_profile_configured(self) -> bool:
+        return bool(self.mt5_login and self.mt5_server)
+
+    @property
+    def mt5_credentials_configured(self) -> bool:
+        return self.mt5_profile_configured and bool(self.mt5_password)
+
+    @property
+    def mt5_connection_configured(self) -> bool:
+        return self.mt5_credentials_configured and bool(self.mt5_terminal_path)
+
+    @property
+    def mt5_login_masked(self) -> str:
+        if not self.mt5_login:
+            return ""
+        visible_digits = min(4, len(self.mt5_login))
+        return f"{'*' * (len(self.mt5_login) - visible_digits)}{self.mt5_login[-visible_digits:]}"
+
+    @property
+    def live_trading_unlocked(self) -> bool:
+        return (
+            self.trading_mode == "live"
+            and self.live_trading_enabled
+            and self.live_trading_acknowledgement == self.live_trading_required_ack
+            and self.broker_adapter == "mt5"
+            and self.mt5_connection_configured
+            and not self.mt5_read_only_enabled
+        )
+
+    @property
+    def live_trading_requested(self) -> bool:
+        return (
+            self.trading_mode == "live"
+            and self.live_trading_enabled
+            and self.live_trading_acknowledgement == self.live_trading_required_ack
+            and self.broker_adapter == "mt5"
+        )
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

@@ -1,0 +1,417 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.responses import Response
+
+from app.brokers.mt5 import MT5Broker
+from app.brokers.paper import PaperBroker
+from app.core.config import Settings, get_settings
+from app.core.telemetry import (
+    MT5_ACCOUNT_MATCH,
+    MT5_CONNECTED,
+    OPEN_POSITIONS,
+    ORDERS_REJECTED,
+    metrics_response,
+)
+from app.domain.models import Candle, Direction, OrderRequest, TradeMode
+from app.domain.symbols import DEFAULT_SYMBOLS, get_symbol_profile
+from app.schemas import (
+    AccountListDTO,
+    ActiveAccountRequestDTO,
+    BacktestDTO,
+    BrokerAccountDTO,
+    CandleDTO,
+    MarketScanDTO,
+    MarketSymbolDTO,
+    MT5ConnectionDTO,
+    MT5PositionDTO,
+    MT5QuoteDTO,
+    NewsFeedDTO,
+    OrderRequestDTO,
+    PositionDTO,
+    RiskDecisionDTO,
+    ScanDTO,
+    SignalDTO,
+    StatusDTO,
+    StrategyDTO,
+)
+from app.services.accounts import AccountRegistry, BrokerAccountProfile
+from app.services.backtest import BacktestService
+from app.services.market_data import MarketDataService
+from app.services.market_scanner import MarketOpportunityScanner
+from app.services.mt5_bridge import MT5ConnectionSnapshot, MT5ReadOnlyBridge
+from app.services.news import NewsService
+from app.services.risk import RiskEngine
+from app.services.scanner import ScannerService
+from app.services.strategy import SignalEngine
+
+settings = get_settings()
+market_data = MarketDataService()
+signal_engine = SignalEngine()
+news_service = NewsService(
+    provider=settings.news_provider,
+    calendar_file=settings.mt5_calendar_file,
+)
+backtests = BacktestService(signal_engine)
+paper_broker = PaperBroker()
+account_registry = AccountRegistry.from_settings(settings)
+mt5_bridge = MT5ReadOnlyBridge(
+    enabled=settings.mt5_read_only_enabled,
+    timeout_ms=settings.mt5_timeout_ms,
+)
+
+
+def market_candles(symbol: str, timeframe: str, limit: int) -> list[Candle]:
+    mt5_candles = mt5_bridge.candles(
+        account_registry.active_account(),
+        symbol,
+        timeframe,
+        limit,
+    )
+    if len(mt5_candles) >= 40:
+        return mt5_candles
+    return market_data.candles(symbol, timeframe, limit)
+
+
+scanner = ScannerService(market_candles, signal_engine, news_service)
+market_scanner = MarketOpportunityScanner(
+    mt5_bridge,
+    signal_engine,
+    cache_seconds=settings.market_scan_cache_seconds,
+)
+
+
+def refresh_mt5_connection() -> MT5ConnectionSnapshot:
+    active_account = account_registry.active_account()
+    snapshot = mt5_bridge.probe(active_account)
+    if active_account:
+        account_registry.mark_connection_verified(
+            active_account.id,
+            snapshot.connection_verified,
+        )
+    MT5_CONNECTED.set(int(snapshot.terminal_connected))
+    MT5_ACCOUNT_MATCH.set(int(snapshot.connection_verified))
+    return snapshot
+
+
+def account_dto(account: BrokerAccountProfile) -> BrokerAccountDTO:
+    connection_verified = account_registry.connection_verified(account.id)
+    return BrokerAccountDTO(
+        id=account.id,
+        provider=account.provider,
+        server=account.server,
+        account_type=account.account_type,
+        login_masked=account.login_masked,
+        active=account.id == account_registry.active_account_id,
+        profile_configured=account.profile_configured,
+        terminal_configured=account.terminal_configured,
+        connection_verified=connection_verified,
+        connection_ready=(
+            account.profile_configured and account.terminal_configured and connection_verified
+        ),
+    )
+
+
+def live_trading_unlocked() -> bool:
+    active_account = account_registry.active_account()
+    return bool(
+        settings.live_trading_requested
+        and not settings.mt5_read_only_enabled
+        and active_account
+        and account_dto(active_account).connection_ready
+    )
+
+
+def risk_engine(config: Settings = settings) -> RiskEngine:
+    return RiskEngine(
+        account_equity=config.account_equity,
+        max_risk_per_trade_pct=config.max_risk_per_trade_pct,
+        max_daily_loss_pct=config.max_daily_loss_pct,
+        max_open_positions=config.max_open_positions,
+        max_symbol_exposure_pct=config.max_symbol_exposure_pct,
+    )
+
+
+def broker() -> PaperBroker | MT5Broker:
+    if settings.broker_adapter == "mt5":
+        return MT5Broker(live_trading_unlocked())
+    return paper_broker
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    yield
+    mt5_bridge.shutdown()
+
+
+app = FastAPI(
+    title=settings.app_name,
+    version="0.1.0",
+    description=(
+        "AI trading workstation API with paper-first execution and live-trading guardrails."
+    ),
+    lifespan=lifespan,
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/metrics")
+def metrics() -> Response:
+    return metrics_response()
+
+
+@app.get("/status", response_model=StatusDTO)
+def status() -> StatusDTO:
+    active_account = account_registry.active_account()
+    mt5_snapshot = refresh_mt5_connection()
+    return StatusDTO(
+        trading_mode=settings.trading_mode,
+        broker_adapter=settings.broker_adapter,
+        live_trading_enabled=settings.live_trading_enabled,
+        live_trading_unlocked=live_trading_unlocked(),
+        default_symbols=settings.symbols,
+        guardrails={
+            "max_risk_per_trade_pct": settings.max_risk_per_trade_pct,
+            "max_daily_loss_pct": settings.max_daily_loss_pct,
+            "max_open_positions": settings.max_open_positions,
+            "max_symbol_exposure_pct": settings.max_symbol_exposure_pct,
+        },
+        broker_account=account_dto(active_account) if active_account else None,
+        mt5=MT5ConnectionDTO.model_validate(mt5_snapshot),
+    )
+
+
+@app.get("/accounts", response_model=AccountListDTO)
+def accounts() -> AccountListDTO:
+    return AccountListDTO(
+        active_account_id=account_registry.active_account_id,
+        accounts=[account_dto(account) for account in account_registry.accounts()],
+    )
+
+
+@app.put("/accounts/active", response_model=AccountListDTO)
+def set_active_account(payload: ActiveAccountRequestDTO) -> AccountListDTO:
+    try:
+        account_registry.set_active(payload.account_id)
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Trading account was not found.") from error
+    return accounts()
+
+
+@app.get("/mt5/quotes", response_model=list[MT5QuoteDTO])
+def mt5_quotes(
+    symbols_query: str | None = Query(default=None, alias="symbols"),
+) -> list[MT5QuoteDTO]:
+    selected_symbols = (
+        [symbol.strip() for symbol in symbols_query.split(",") if symbol.strip()]
+        if symbols_query
+        else settings.symbols
+    )
+    quotes = mt5_bridge.quotes(account_registry.active_account(), selected_symbols)
+    return [MT5QuoteDTO.model_validate(quote) for quote in quotes]
+
+
+@app.get("/mt5/positions", response_model=list[MT5PositionDTO])
+def mt5_positions() -> list[MT5PositionDTO]:
+    positions = mt5_bridge.positions(account_registry.active_account())
+    return [MT5PositionDTO.model_validate(position) for position in positions]
+
+
+@app.get("/symbols")
+def symbols() -> list[dict[str, str | float]]:
+    return [get_symbol_profile(symbol).__dict__ for symbol in DEFAULT_SYMBOLS]
+
+
+@app.get("/market/symbols", response_model=list[MarketSymbolDTO])
+def market_symbols(
+    search: str = Query(default="", max_length=80),
+    limit: int = Query(default=1000, ge=1, le=2000),
+) -> list[MarketSymbolDTO]:
+    catalog = mt5_bridge.market_symbols(account_registry.active_account())
+    query = search.casefold().strip()
+    if catalog:
+        filtered = [
+            symbol
+            for symbol in catalog
+            if not query
+            or query in symbol.symbol.casefold()
+            or query in symbol.description.casefold()
+            or query in symbol.category.casefold()
+        ]
+        return [
+            MarketSymbolDTO(
+                symbol=symbol.symbol,
+                description=symbol.description or symbol.symbol,
+                category=symbol.category,
+                currency_base=symbol.currency_base,
+                currency_profit=symbol.currency_profit,
+                digits=symbol.digits,
+                bid=symbol.bid,
+                ask=symbol.ask,
+                spread_points=symbol.spread_points,
+                visible=symbol.visible,
+                trade_mode=symbol.trade_mode,
+                last_tick_at=symbol.last_tick_at,
+                source="mt5",
+            )
+            for symbol in filtered[:limit]
+        ]
+
+    configured = [get_symbol_profile(symbol) for symbol in settings.symbols]
+    filtered_configured = [
+        profile
+        for profile in configured
+        if not query
+        or query in profile.symbol.casefold()
+        or query in profile.display_name.casefold()
+        or query in profile.asset_class.casefold()
+    ]
+    return [
+        MarketSymbolDTO(
+            symbol=profile.symbol,
+            description=profile.display_name,
+            category=profile.asset_class,
+            currency_base="",
+            currency_profit="USD",
+            digits=0,
+            bid=0.0,
+            ask=0.0,
+            spread_points=profile.default_spread_points,
+            visible=True,
+            trade_mode=0,
+            last_tick_at=None,
+            source="configured",
+        )
+        for profile in filtered_configured[:limit]
+    ]
+
+
+@app.get("/market/scan", response_model=MarketScanDTO)
+def scan_market(
+    timeframe: str = Query(default="1m"),
+    limit: int = Query(default=30, ge=1, le=100),
+    force: bool = Query(default=False),
+) -> MarketScanDTO:
+    result = market_scanner.scan(
+        account_registry.active_account(),
+        timeframe,
+        settings.market_scan_max_symbols,
+        limit,
+        force,
+    )
+    return MarketScanDTO.model_validate(result)
+
+
+@app.get("/strategy", response_model=StrategyDTO)
+def strategy() -> StrategyDTO:
+    return StrategyDTO.model_validate(signal_engine.definition())
+
+
+@app.get("/candles/{symbol}", response_model=list[CandleDTO])
+def candles(
+    symbol: str,
+    timeframe: str = Query(default="1m"),
+    limit: int = Query(default=240, ge=40, le=2000),
+) -> list[CandleDTO]:
+    return [
+        CandleDTO.model_validate(candle.__dict__)
+        for candle in market_candles(symbol, timeframe, limit)
+    ]
+
+
+@app.get("/signals/{symbol}", response_model=SignalDTO)
+def signal(symbol: str, timeframe: str = Query(default="1m")) -> SignalDTO:
+    generated = signal_engine.generate(market_candles(symbol, timeframe, 240))
+    return SignalDTO.model_validate(generated.__dict__)
+
+
+@app.get("/scan", response_model=ScanDTO)
+def scan(
+    symbols_query: str | None = Query(default=None, alias="symbols"),
+    timeframe: str = Query(default="1m"),
+) -> ScanDTO:
+    selected_symbols = (
+        [symbol.strip() for symbol in symbols_query.split(",") if symbol.strip()]
+        if symbols_query
+        else settings.symbols
+    )
+    signals, news = scanner.scan(selected_symbols, timeframe)
+    return ScanDTO(signals=signals, events=news.events, news_status=news.status)
+
+
+@app.get("/news/analysis", response_model=NewsFeedDTO)
+def news_analysis(
+    symbols_query: str | None = Query(default=None, alias="symbols"),
+) -> NewsFeedDTO:
+    selected_symbols = (
+        [symbol.strip() for symbol in symbols_query.split(",") if symbol.strip()]
+        if symbols_query
+        else settings.symbols
+    )
+    return NewsFeedDTO.model_validate(news_service.analysis_feed(selected_symbols))
+
+
+@app.post("/risk/evaluate", response_model=RiskDecisionDTO)
+def evaluate_risk(payload: OrderRequestDTO) -> RiskDecisionDTO:
+    order = OrderRequest(
+        symbol=payload.symbol,
+        direction=Direction(payload.direction),
+        volume=payload.volume,
+        entry=payload.entry,
+        stop_loss=payload.stop_loss,
+        take_profit=payload.take_profit,
+        mode=TradeMode(payload.mode),
+    )
+    decision = risk_engine().evaluate(order, broker().positions())
+    return RiskDecisionDTO.model_validate(decision.__dict__)
+
+
+@app.post("/orders", response_model=PositionDTO)
+def place_order(payload: OrderRequestDTO) -> PositionDTO:
+    if payload.mode == "signal_only":
+        raise HTTPException(status_code=409, detail="Signal-only mode will not place orders.")
+    if settings.trading_mode == "live" and not live_trading_unlocked():
+        ORDERS_REJECTED.labels(reason="live_locked").inc()
+        raise HTTPException(status_code=403, detail="Live trading is locked by configuration.")
+
+    order = OrderRequest(
+        symbol=payload.symbol,
+        direction=Direction(payload.direction),
+        volume=payload.volume,
+        entry=payload.entry,
+        stop_loss=payload.stop_loss,
+        take_profit=payload.take_profit,
+        mode=TradeMode(payload.mode),
+    )
+    decision = risk_engine().evaluate(order, broker().positions())
+    if not decision.approved:
+        ORDERS_REJECTED.labels(reason="risk").inc()
+        raise HTTPException(status_code=422, detail=decision.reason)
+
+    position = broker().place_order(order)
+    OPEN_POSITIONS.set(len(broker().positions()))
+    return PositionDTO.model_validate(position.__dict__)
+
+
+@app.get("/positions", response_model=list[PositionDTO])
+def positions() -> list[PositionDTO]:
+    return [PositionDTO.model_validate(position.__dict__) for position in broker().positions()]
+
+
+@app.get("/backtests/{symbol}", response_model=BacktestDTO)
+def backtest(symbol: str, timeframe: str = Query(default="1m")) -> BacktestDTO:
+    result = backtests.run(market_candles(symbol, timeframe, 500))
+    return BacktestDTO.model_validate(result.__dict__)
