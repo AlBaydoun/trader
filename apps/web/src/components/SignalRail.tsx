@@ -18,6 +18,7 @@ interface SignalRailProps {
   backtest?: Backtest;
   extremeBacktest?: ExtremeBacktest;
   extremeHistoryLimit: number;
+  timeframe: string;
   events: MarketEvent[];
   newsStatus?: NewsStatus;
   activeSymbol: string;
@@ -39,6 +40,7 @@ export function SignalRail({
   backtest,
   extremeBacktest,
   extremeHistoryLimit,
+  timeframe,
   events,
   newsStatus,
   activeSymbol,
@@ -260,7 +262,9 @@ export function SignalRail({
             </span>
           )}
         </div>
-        {extremeBacktest ? (
+        {timeframe !== "1m" ? (
+          <p className="muted">This MT5 indicator history test is available on M1 only. Switch the chart timeframe to M1 to run it.</p>
+        ) : extremeBacktest ? (
           <>
             <p className="backtest-window">
               {extremeBacktest.symbol} M1 · {extremeBacktest.bars_tested.toLocaleString()} bars · {formatDate(extremeBacktest.data_start)} to {formatDate(extremeBacktest.data_end)}

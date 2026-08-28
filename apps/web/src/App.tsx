@@ -280,9 +280,12 @@ export function App() {
 
   useEffect(() => {
     if (!activeSymbol) return;
+    const extremeHistory = timeframe === "1m"
+      ? getExtremeBacktest(activeSymbol, timeframe, extremeHistoryLimit).catch(() => undefined)
+      : Promise.resolve(undefined);
     Promise.all([
       getBacktest(activeSymbol, timeframe).catch(() => undefined),
-      getExtremeBacktest(activeSymbol, timeframe, extremeHistoryLimit).catch(() => undefined)
+      extremeHistory
     ]).then(([baseResult, extremeResult]) => {
       setBacktest(baseResult);
       setExtremeBacktest(extremeResult);
@@ -576,6 +579,7 @@ export function App() {
           backtest={backtest}
           extremeBacktest={extremeBacktest}
           extremeHistoryLimit={extremeHistoryLimit}
+          timeframe={timeframe}
           onExtremeHistoryLimitChange={setExtremeHistoryLimit}
           events={events}
           newsStatus={newsStatus}
