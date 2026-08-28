@@ -25,8 +25,8 @@ This project is **not** a profit guarantee and does not ship with live trading e
   spread cost, quote freshness, and current market availability.
 - Separate 85/15 extreme monitor combining RSI(1), MACD(5,6,1), and moving-average context, with
   threshold-entry alerts, cooldowns, browser sound, and optional voice announcements.
-- Searchable left market drawer for adding, removing, and drag-ordering charts with local
-  persistence.
+- Searchable left market drawer for adding, removing, and drag-ordering charts, plus direct chart
+  move handles, with local persistence.
 - Chart zoom controls and candle inspection with exact start/end time, OHLC, and volume.
 - Resizable chart tiles with mouse, touch, and keyboard controls; each chart height is saved
   locally per device.

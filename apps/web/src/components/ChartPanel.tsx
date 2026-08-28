@@ -1,5 +1,13 @@
-import { ExternalLink, GripHorizontal, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { ExternalLink, GripHorizontal, GripVertical, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type PointerEvent
+} from "react";
 import type { Candle, Signal } from "../types";
 import { IndicatorStack } from "./IndicatorStack";
 
@@ -10,6 +18,8 @@ interface ChartPanelProps {
   signal?: Signal;
   focused: boolean;
   onFocus: (symbol: string) => void;
+  onMove: (source: string, target: string) => void;
+  onMoveByOffset: (symbol: string, offset: number) => void;
   height?: number;
   onResize: (symbol: string, height: number) => void;
 }
@@ -34,14 +44,24 @@ export function ChartPanel({
   signal,
   focused,
   onFocus,
+  onMove,
+  onMoveByOffset,
   height,
   onResize
 }: ChartPanelProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
+  const moveRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    lastTarget: string | null;
+    active: boolean;
+  } | null>(null);
   const [visibleCount, setVisibleCount] = useState(DEFAULT_VISIBLE_CANDLES);
   const [hovered, setHovered] = useState<HoveredCandle | null>(null);
   const [isResizing, setIsResizing] = useState(false);
+  const [isMoving, setIsMoving] = useState(false);
   const visibleCandles = useMemo(
     () => candles.slice(-Math.min(visibleCount, candles.length)),
     [candles, visibleCount]
@@ -133,6 +153,83 @@ export function ChartPanel({
     }
   }
 
+  function startMove(event: PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    moveRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastTarget: symbol,
+      active: false
+    };
+  }
+
+  function moveChart(event: PointerEvent<HTMLButtonElement>) {
+    const move = moveRef.current;
+    if (!move || move.pointerId !== event.pointerId) return;
+    if (!move.active) {
+      const distance = Math.hypot(event.clientX - move.startX, event.clientY - move.startY);
+      if (distance < 8) return;
+      move.active = true;
+      setIsMoving(true);
+    }
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>("[data-chart-symbol]")
+      ?.dataset.chartSymbol;
+    if (!target || target === symbol || target === move.lastTarget) return;
+    move.lastTarget = target;
+    onMove(symbol, target);
+  }
+
+  function finishMove(event: PointerEvent<HTMLButtonElement>) {
+    const move = moveRef.current;
+    if (!move || move.pointerId !== event.pointerId) return;
+    event.stopPropagation();
+    moveRef.current = null;
+    setIsMoving(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function startNativeMove(event: DragEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/trader-symbol", symbol);
+    setIsMoving(true);
+  }
+
+  function finishNativeMove() {
+    setIsMoving(false);
+  }
+
+  function allowNativeDrop(event: DragEvent<HTMLElement>) {
+    if (!event.dataTransfer.types.includes("text/trader-symbol")) return;
+    if (event.currentTarget.getAttribute("data-chart-symbol") === symbol) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }
+
+  function dropChart(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    const source = event.dataTransfer.getData("text/trader-symbol");
+    if (source && source !== symbol) onMove(source, symbol);
+    setIsMoving(false);
+  }
+
+  function handleMoveKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      onMoveByOffset(symbol, -1);
+    } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      onMoveByOffset(symbol, 1);
+    }
+  }
+
   function inspectCandle(clientX: number, clientY: number) {
     const canvas = canvasRef.current;
     if (!canvas || visibleCandles.length === 0) return;
@@ -201,14 +298,40 @@ export function ChartPanel({
 
   return (
     <section
-      className={`chart-panel ${focused ? "is-focused" : ""} ${isResizing ? "is-resizing" : ""}`}
+      className={`chart-panel ${focused ? "is-focused" : ""} ${isResizing ? "is-resizing" : ""} ${isMoving ? "is-moving" : ""}`}
+      data-chart-symbol={symbol}
       style={height ? { height: `${height}px` } : undefined}
       onClick={() => onFocus(symbol)}
+      onDragOver={allowNativeDrop}
+      onDrop={dropChart}
     >
       <header className="panel-title">
-        <div>
-          <strong>{symbol}</strong>
-          <span>{timeframe} <b className={`data-source ${source}`}>{source === "mt5" ? "MT5" : "Demo"}</b></span>
+        <div className="chart-heading">
+          <button
+            className="chart-drag-handle"
+            type="button"
+            draggable
+            aria-label={`Move ${symbol} chart`}
+            title="Drag to move chart"
+            onPointerDown={startMove}
+            onPointerMove={moveChart}
+            onPointerUp={finishMove}
+            onPointerCancel={finishMove}
+            onDragStart={startNativeMove}
+            onDragEnd={finishNativeMove}
+            onKeyDown={handleMoveKeyDown}
+            onLostPointerCapture={() => {
+              moveRef.current = null;
+              setIsMoving(false);
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <GripVertical size={15} aria-hidden="true" />
+          </button>
+          <div>
+            <strong>{symbol}</strong>
+            <span>{timeframe} <b className={`data-source ${source}`}>{source === "mt5" ? "MT5" : "Demo"}</b></span>
+          </div>
         </div>
         <div className="chart-actions">
           <div className={`direction ${signal?.direction ?? "hold"}`}>{signal?.direction ?? "hold"}</div>

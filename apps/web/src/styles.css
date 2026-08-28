@@ -303,6 +303,51 @@ button:disabled {
   transition: none;
 }
 
+.chart-panel.is-moving {
+  border-color: #e7c766;
+  box-shadow: 0 0 0 1px rgba(231, 199, 102, 0.18);
+  transform: none;
+}
+
+.chart-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chart-drag-handle {
+  display: inline-grid;
+  flex: 0 0 24px;
+  place-items: center;
+  width: 24px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #697785;
+  cursor: grab;
+  touch-action: none;
+}
+
+.chart-drag-handle:active {
+  cursor: grabbing;
+}
+
+.chart-drag-handle:hover,
+.chart-drag-handle:focus-visible,
+.chart-panel.is-moving .chart-drag-handle {
+  border-color: #455560;
+  background: #1d282f;
+  color: #e7c766;
+  outline: none;
+}
+
+.chart-panel.is-moving .chart-drag-handle {
+  cursor: grabbing;
+}
+
 .chart-resize-handle {
   display: flex;
   align-items: center;

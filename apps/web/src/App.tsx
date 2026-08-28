@@ -358,6 +358,19 @@ export function App() {
     });
   }
 
+  function moveSymbolByOffset(symbol: string, offset: number) {
+    setSelectedSymbols((current) => {
+      const sourceIndex = current.indexOf(symbol);
+      const targetIndex = sourceIndex + offset;
+      if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= current.length) return current;
+      const next = [...current];
+      const [moved] = next.splice(sourceIndex, 1);
+      if (!moved) return current;
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+  }
+
   function resizeChart(symbol: string, height: number) {
     setChartHeights((current) => ({
       ...current,
@@ -423,6 +436,8 @@ export function App() {
               signal={signals[symbol]}
               focused={activeSymbol === symbol}
               onFocus={setActiveSymbol}
+              onMove={moveSymbol}
+              onMoveByOffset={moveSymbolByOffset}
               height={chartHeights[symbol]}
               onResize={resizeChart}
             />
