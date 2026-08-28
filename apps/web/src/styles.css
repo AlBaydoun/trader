@@ -2256,6 +2256,111 @@ button:disabled {
   white-space: nowrap;
 }
 
+.extreme-notification-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 58px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #26313a;
+  background: #151c21;
+}
+
+.extreme-notification-title,
+.extreme-notification-options,
+.extreme-notification-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.extreme-notification-title {
+  min-width: 0;
+  gap: 8px;
+}
+
+.extreme-notification-title > svg {
+  flex: 0 0 auto;
+  color: #e7c766;
+}
+
+.extreme-notification-title strong,
+.extreme-notification-title span {
+  display: block;
+}
+
+.extreme-notification-title strong {
+  color: #dce5eb;
+  font-size: 11px;
+}
+
+.extreme-notification-title span {
+  margin-top: 3px;
+  color: #7f8e9b;
+  font-size: 9px;
+}
+
+.extreme-notification-options {
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.extreme-notification-toggle {
+  position: relative;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid #34424c;
+  border-radius: 6px;
+  color: #afbac3;
+  background: #171d22;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.extreme-notification-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.extreme-notification-toggle input:checked + .toggle-track {
+  border-color: #4b927d;
+  background: #245846;
+}
+
+.extreme-notification-toggle input:checked + .toggle-track span {
+  background: #8be8cb;
+  transform: translateX(12px);
+}
+
+.extreme-notification-toggle.upper input:checked + .toggle-track {
+  border-color: #8f5360;
+  background: #542b35;
+}
+
+.extreme-notification-toggle.upper input:checked + .toggle-track span {
+  background: #ffacb9;
+}
+
+.extreme-notification-toggle > span:last-child b {
+  color: #dce5eb;
+  font-weight: 600;
+}
+
+.extreme-notification-toggle.upper > span:last-child b {
+  color: #ff9eac;
+}
+
+.extreme-notification-toggle.lower > span:last-child b {
+  color: #75e4c1;
+}
+
+.extreme-notification-toggle:has(input:focus-visible) {
+  outline: 2px solid #e7c766;
+  outline-offset: 2px;
+}
+
 .extreme-levels {
   display: grid;
   grid-template-columns: 160px 160px 160px minmax(200px, 1fr);
@@ -2412,6 +2517,30 @@ button:disabled {
   line-height: 1.35;
 }
 
+.alert-recommendation b,
+.alert-recommendation small {
+  display: block;
+}
+
+.alert-recommendation b {
+  font-size: 11px;
+}
+
+.alert-recommendation.sell b {
+  color: #ff9eac;
+}
+
+.alert-recommendation.buy b {
+  color: #75e4c1;
+}
+
+.alert-recommendation small {
+  margin-top: 3px;
+  color: #8a98a6;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
 .alert-reasoning {
   padding: 0 16px 12px 175px;
   color: #8a98a6;
@@ -2499,6 +2628,36 @@ button:disabled {
 
 .extreme-reading-row > span:last-child {
   overflow: hidden;
+  color: #8a98a6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.extreme-reading-row .reading-recommendation {
+  overflow: hidden;
+  white-space: normal;
+}
+
+.reading-recommendation b,
+.reading-recommendation small {
+  display: block;
+}
+
+.reading-recommendation b {
+  font-size: 10px;
+}
+
+.reading-recommendation.sell b {
+  color: #ff9eac;
+}
+
+.reading-recommendation.buy b {
+  color: #75e4c1;
+}
+
+.reading-recommendation small {
+  overflow: hidden;
+  margin-top: 3px;
   color: #8a98a6;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2721,6 +2880,21 @@ button:disabled {
 
   .extreme-status b {
     margin-left: auto;
+  }
+
+  .extreme-notification-controls {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .extreme-notification-options {
+    width: 100%;
+  }
+
+  .extreme-notification-toggle {
+    flex: 1 1 0;
+    justify-content: center;
   }
 
   .extreme-levels {

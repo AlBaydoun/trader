@@ -70,6 +70,7 @@ export function App() {
   const [tradeMode, setTradeMode] = useState<TradeMode>("auto_trade");
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [extremeNotifications, setExtremeNotifications] = useState(loadExtremeNotificationPreferences);
   const [scanning, setScanning] = useState(false);
   const [backtest, setBacktest] = useState<Backtest | undefined>();
   const [paperPortfolio, setPaperPortfolio] = useState<PaperPortfolio>();
@@ -211,13 +212,20 @@ export function App() {
     for (const alert of result.alerts) {
       if (extremeAlertIdsRef.current.has(alert.id)) continue;
       extremeAlertIdsRef.current.add(alert.id);
-      if (soundEnabled) playExtremeAlert(alert);
-      if (voiceEnabled) speakExtremeAlert(alert);
+      const enabled = alert.level === "upper_85"
+        ? extremeNotifications.upper85
+        : extremeNotifications.lower15;
+      if (enabled && soundEnabled) playExtremeAlert(alert);
+      if (enabled && voiceEnabled) speakExtremeAlert(alert);
     }
     if (extremeAlertIdsRef.current.size > 500) {
       extremeAlertIdsRef.current = new Set(result.recent_alerts.map((alert) => alert.id));
     }
-  }, [soundEnabled, timeframe, voiceEnabled]);
+  }, [extremeNotifications, soundEnabled, timeframe, voiceEnabled]);
+
+  useEffect(() => {
+    window.localStorage.setItem("trader:extreme-notifications", JSON.stringify(extremeNotifications));
+  }, [extremeNotifications]);
 
   useEffect(() => {
     const startup = window.setTimeout(() => void refreshExtreme(), 3500);
@@ -476,6 +484,10 @@ export function App() {
         busy={extremeBusy}
         soundEnabled={soundEnabled}
         voiceEnabled={voiceEnabled}
+        upper85NotificationsEnabled={extremeNotifications.upper85}
+        lower15NotificationsEnabled={extremeNotifications.lower15}
+        onUpper85NotificationsToggle={(enabled) => setExtremeNotifications((current) => ({ ...current, upper85: enabled }))}
+        onLower15NotificationsToggle={(enabled) => setExtremeNotifications((current) => ({ ...current, lower15: enabled }))}
         onRun={() => void runExtremeScan()}
       />
     </main>
@@ -511,5 +523,23 @@ function loadChartHeights(): Record<string, number> {
     );
   } catch {
     return {};
+  }
+}
+
+function loadExtremeNotificationPreferences(): { upper85: boolean; lower15: boolean } {
+  try {
+    const stored = window.localStorage.getItem("trader:extreme-notifications");
+    if (!stored) return { upper85: true, lower15: true };
+    const parsed: unknown = JSON.parse(stored);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { upper85: true, lower15: true };
+    }
+    const preferences = parsed as { upper85?: unknown; lower15?: unknown };
+    return {
+      upper85: preferences.upper85 !== false,
+      lower15: preferences.lower15 !== false
+    };
+  } catch {
+    return { upper85: true, lower15: true };
   }
 }

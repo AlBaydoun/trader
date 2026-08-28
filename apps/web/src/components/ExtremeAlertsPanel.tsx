@@ -7,6 +7,10 @@ interface ExtremeAlertsPanelProps {
   busy: boolean;
   soundEnabled: boolean;
   voiceEnabled: boolean;
+  upper85NotificationsEnabled: boolean;
+  lower15NotificationsEnabled: boolean;
+  onUpper85NotificationsToggle: (enabled: boolean) => void;
+  onLower15NotificationsToggle: (enabled: boolean) => void;
   onRun: () => void;
 }
 
@@ -15,6 +19,10 @@ export function ExtremeAlertsPanel({
   busy,
   soundEnabled,
   voiceEnabled,
+  upper85NotificationsEnabled,
+  lower15NotificationsEnabled,
+  onUpper85NotificationsToggle,
+  onLower15NotificationsToggle,
   onRun
 }: ExtremeAlertsPanelProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -50,10 +58,40 @@ export function ExtremeAlertsPanel({
         <b>Alert at 85.00 or 15.00</b>
       </div>
 
+      <div className="extreme-notification-controls">
+        <div className="extreme-notification-title">
+          <BellRing size={15} />
+          <div>
+            <strong>Threshold notifications</strong>
+            <span>Rows stay visible; these toggles control sound and voice delivery.</span>
+          </div>
+        </div>
+        <div className="extreme-notification-options">
+          <label className="extreme-notification-toggle upper">
+            <input
+              type="checkbox"
+              checked={upper85NotificationsEnabled}
+              onChange={(event) => onUpper85NotificationsToggle(event.target.checked)}
+            />
+            <span className="toggle-track"><span /></span>
+            <span>85.00 <b>Sell watch</b></span>
+          </label>
+          <label className="extreme-notification-toggle lower">
+            <input
+              type="checkbox"
+              checked={lower15NotificationsEnabled}
+              onChange={(event) => onLower15NotificationsToggle(event.target.checked)}
+            />
+            <span className="toggle-track"><span /></span>
+            <span>15.00 <b>Buy watch</b></span>
+          </label>
+        </div>
+      </div>
+
       <div className="extreme-levels">
-        <div className="level-card upper"><strong>85.00</strong><span>Upper extreme</span><small>Overbought watch</small></div>
+        <div className="level-card upper"><strong>85.00</strong><span>Upper extreme</span><small>SELL watch</small></div>
         <div className="level-card middle"><strong>50.00</strong><span>Neutral center</span><small>Confirmation required</small></div>
-        <div className="level-card lower"><strong>15.00</strong><span>Lower extreme</span><small>Oversold watch</small></div>
+        <div className="level-card lower"><strong>15.00</strong><span>Lower extreme</span><small>BUY watch</small></div>
         <div className="extreme-method"><ShieldAlert size={15} /><span>Alerts fire on entry into a zone, then respect a five-minute cooldown. They never place orders.</span></div>
       </div>
 
@@ -90,7 +128,10 @@ function AlertRow({ alert, expanded, onToggle }: { alert: ExtremeAlert; expanded
         <span className="alert-symbol"><strong>{alert.symbol}</strong><small>{upper ? "85.00 reached" : "15.00 reached"}</small></span>
         <span className="alert-score"><strong>{alert.score.toFixed(2)}</strong><small>composite score</small></span>
         <span className="alert-factors"><b>RSI {alert.rsi1.toFixed(2)}</b><b>MACD {alert.macd >= 0 ? "+" : ""}{alert.macd.toFixed(5)}</b><b>MA {alert.ema_fast >= alert.ema_slow ? "up" : "down"}</b></span>
-        <span className="alert-recommendation">{alert.recommendation}</span>
+        <span className={`alert-recommendation ${upper ? "sell" : "buy"}`}>
+          <b>{upper ? "SELL watch" : "BUY watch"}</b>
+          <small>{alert.recommendation}</small>
+        </span>
         <button className="icon-button compact-icon" type="button" title="Show alert reasoning" aria-label={`Show ${alert.symbol} alert reasoning`} onClick={onToggle}><ChevronDown size={14} /></button>
       </div>
       {expanded && <div className="alert-reasoning"><span>{dateTime(alert.triggered_at)}</span>{alert.reasons.map((reason) => <p key={reason}>{reason}</p>)}</div>}
@@ -107,7 +148,10 @@ function ReadingRow({ reading }: { reading: ExtremeReading }) {
       <span className="reading-bar"><i style={{ width: `${reading.score}%` }} /></span>
       <span>RSI(1) {reading.rsi1.toFixed(0)}</span>
       <span>MACD {reading.macd >= 0 ? "+" : ""}{reading.macd.toFixed(4)}</span>
-      <span>{reading.recommendation}</span>
+      <span className={`reading-recommendation ${levelClass === "upper" ? "sell" : "buy"}`}>
+        <b>{levelClass === "upper" ? "SELL watch" : "BUY watch"}</b>
+        <small>{reading.recommendation}</small>
+      </span>
     </div>
   );
 }
