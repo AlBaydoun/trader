@@ -67,6 +67,129 @@ class PositionDTO(APIModel):
     opened_at: datetime
 
 
+class PaperTradeDTO(APIModel):
+    id: str
+    symbol: str
+    direction: Literal["buy", "sell"]
+    timeframe: str
+    status: Literal["open", "closed"]
+    quantity: float
+    entry_price: float
+    current_price: float
+    stop_loss: float | None
+    take_profit: float | None
+    risk_amount: float
+    entry_fee: float
+    exit_fee: float
+    gross_pnl: float
+    net_pnl: float
+    unrealized_pnl: float
+    return_pct: float
+    r_multiple: float
+    confidence: float
+    opportunity_score: float
+    scan_rank: int
+    reasons: list[str]
+    source: str
+    source_account_id: str
+    opened_at: datetime
+    updated_at: datetime
+    closed_at: datetime | None
+    exit_price: float | None
+    exit_reason: Literal[
+        "stop_loss",
+        "take_profit",
+        "signal_reversal",
+        "time_limit",
+        "operator",
+    ] | None
+    max_favorable_excursion: float
+    max_adverse_excursion: float
+
+
+class PaperDecisionDTO(APIModel):
+    id: str
+    cycle_id: str
+    created_at: datetime
+    action: Literal["cycle", "opened", "closed", "error", "control"]
+    outcome: str
+    reason: str
+    symbol: str | None
+    trade_id: str | None
+    signal_direction: Literal["buy", "sell", "hold"] | None
+    opportunity_score: float | None
+
+
+class PaperEquityPointDTO(APIModel):
+    timestamp: datetime
+    equity: float
+    balance: float
+    unrealized_pnl: float
+
+
+class PaperEngineStatusDTO(APIModel):
+    enabled: bool
+    virtual_only: bool
+    timeframe: str
+    minimum_opportunity_score: float
+    max_open_positions: int
+    risk_per_trade_pct: float
+    cycle_interval_seconds: int
+    cycle_count: int
+    last_cycle_at: datetime | None
+    last_scan_at: datetime | None
+    next_cycle_at: datetime | None
+    last_error: str
+    market_source: str
+    source_account_id: str
+    scanned_symbols: int
+    eligible_candidates: int
+    opened_last_cycle: int
+    closed_last_cycle: int
+
+
+class PaperMetricsDTO(APIModel):
+    starting_balance: float
+    balance: float
+    equity: float
+    realized_pnl: float
+    unrealized_pnl: float
+    total_return_pct: float
+    open_positions: int
+    closed_trades: int
+    winning_trades: int
+    losing_trades: int
+    win_rate: float
+    profit_factor: float | None
+    average_r_multiple: float
+    max_drawdown_pct: float
+    open_risk_amount: float
+    fees_paid: float
+    best_trade: float | None
+    worst_trade: float | None
+
+
+class PaperPortfolioDTO(APIModel):
+    engine: PaperEngineStatusDTO
+    metrics: PaperMetricsDTO
+    open_positions: list[PaperTradeDTO]
+    closed_trades: list[PaperTradeDTO]
+    decisions: list[PaperDecisionDTO]
+    equity_curve: list[PaperEquityPointDTO]
+    disclaimer: str
+
+
+class PaperControlRequestDTO(APIModel):
+    enabled: bool | None = None
+    timeframe: Literal["1m", "5m", "15m", "1h", "4h", "1d"] | None = None
+    minimum_opportunity_score: float | None = Field(default=None, ge=0, le=100)
+    max_open_positions: int | None = Field(default=None, ge=1, le=200)
+
+
+class PaperResetRequestDTO(APIModel):
+    confirmation: str
+
+
 class BacktestDTO(APIModel):
     symbol: str
     timeframe: str
@@ -243,6 +366,9 @@ class MarketOpportunityDTO(APIModel):
     category: str
     direction: Literal["buy", "sell", "hold"]
     confidence: float
+    entry: float
+    stop_loss: float | None
+    take_profit: float | None
     opportunity_score: float
     estimated_move_pct: float
     spread_pct: float
@@ -260,6 +386,53 @@ class MarketScanDTO(APIModel):
     generated_at: datetime
     disclaimer: str
     opportunities: list[MarketOpportunityDTO]
+
+
+class ExtremeReadingDTO(APIModel):
+    symbol: str
+    price: float
+    score: float
+    level: Literal["upper_85", "lower_15", "neutral"]
+    rsi1: float
+    macd: float
+    macd_signal: float
+    macd_histogram: float
+    ema_fast: float
+    ema_slow: float
+    recommendation: str
+    reasons: list[str]
+    source: str
+    detected_at: datetime
+
+
+class ExtremeAlertDTO(APIModel):
+    id: str
+    symbol: str
+    level: Literal["upper_85", "lower_15"]
+    score: float
+    rsi1: float
+    macd: float
+    macd_signal: float
+    ema_fast: float
+    ema_slow: float
+    recommendation: str
+    reasons: list[str]
+    triggered_at: datetime
+    source: str
+
+
+class ExtremeScanDTO(APIModel):
+    source: str
+    timeframe: str
+    available_symbols: int
+    scanned_symbols: int
+    generated_at: datetime
+    upper_level: float
+    lower_level: float
+    readings: list[ExtremeReadingDTO]
+    alerts: list[ExtremeAlertDTO]
+    recent_alerts: list[ExtremeAlertDTO]
+    disclaimer: str
 
 
 class StatusDTO(APIModel):

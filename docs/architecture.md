@@ -16,6 +16,12 @@ Trader is designed as an operator-controlled workstation. It supports market sca
 - **Market opportunity scanner**: Enumerates the active MT5 account's tradeable catalog, scans each
   instrument, and ranks current setups. It penalizes spread cost, stale quotes, inactive sessions,
   and weak directional conviction.
+- **Extreme scanner**: Independently reads the whole MT5 catalog and computes the requested RSI(1),
+  MACD(5,6,1), and moving-average context. It ranks a composite 0-100 score, detects entry into
+  the 85/15 zones, and retains alert history without creating orders.
+- **Paper trading service**: Persists a virtual ledger, processes market cycles, applies simulated
+  slippage and commission, closes positions on stop, target, reversal, time limit, or operator
+  action, and exposes detailed equity and decision history.
 - **Risk engine**: Server-side order gate enforcing stop losses, max risk per trade, max daily loss, max open positions, and symbol exposure.
 - **Broker adapters**: Paper broker is enabled by default. MT5/JustMarkets is represented as an adapter boundary and remains locked until explicit live settings are supplied.
 - **Observability**: Prometheus metrics plus Docker Compose hooks for Grafana.
@@ -29,7 +35,8 @@ Trader is designed as an operator-controlled workstation. It supports market sca
 5. The broker-wide scanner independently ranks all available instruments, even when they are not
    open as charts.
 6. UI displays charts, reasons, strategy definition, news analysis, market ranking, and alert hooks.
-7. If auto mode is selected, any order request still passes through the API risk engine and broker safety locks.
+7. The paper loop can process eligible signals into the virtual ledger; no MT5 order function is called.
+8. If auto mode is selected for a live integration, any order request still passes through the API risk engine and broker safety locks.
 
 ## Extensibility
 

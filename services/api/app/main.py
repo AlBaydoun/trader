@@ -1,12 +1,13 @@
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+from threading import Lock
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import Response
 
 from app.brokers.mt5 import MT5Broker
-from app.brokers.paper import PaperBroker
 from app.core.config import Settings, get_settings
 from app.core.telemetry import (
     MT5_ACCOUNT_MATCH,
@@ -23,6 +24,7 @@ from app.schemas import (
     BacktestDTO,
     BrokerAccountDTO,
     CandleDTO,
+    ExtremeScanDTO,
     MarketScanDTO,
     MarketSymbolDTO,
     MT5ConnectionDTO,
@@ -30,6 +32,9 @@ from app.schemas import (
     MT5QuoteDTO,
     NewsFeedDTO,
     OrderRequestDTO,
+    PaperControlRequestDTO,
+    PaperPortfolioDTO,
+    PaperResetRequestDTO,
     PositionDTO,
     RiskDecisionDTO,
     ScanDTO,
@@ -39,10 +44,12 @@ from app.schemas import (
 )
 from app.services.accounts import AccountRegistry, BrokerAccountProfile
 from app.services.backtest import BacktestService
+from app.services.extreme_scanner import ExtremeScanResult, ExtremeSignalScanner
 from app.services.market_data import MarketDataService
 from app.services.market_scanner import MarketOpportunityScanner
 from app.services.mt5_bridge import MT5ConnectionSnapshot, MT5ReadOnlyBridge
 from app.services.news import NewsService
+from app.services.paper_trading import PaperPortfolio, PaperTradingService
 from app.services.risk import RiskEngine
 from app.services.scanner import ScannerService
 from app.services.strategy import SignalEngine
@@ -55,7 +62,6 @@ news_service = NewsService(
     calendar_file=settings.mt5_calendar_file,
 )
 backtests = BacktestService(signal_engine)
-paper_broker = PaperBroker()
 account_registry = AccountRegistry.from_settings(settings)
 mt5_bridge = MT5ReadOnlyBridge(
     enabled=settings.mt5_read_only_enabled,
@@ -81,6 +87,24 @@ market_scanner = MarketOpportunityScanner(
     signal_engine,
     cache_seconds=settings.market_scan_cache_seconds,
 )
+extreme_scanner = ExtremeSignalScanner(
+    mt5_bridge,
+    cache_seconds=settings.extreme_scan_cache_seconds,
+    alert_cooldown_seconds=settings.extreme_alert_cooldown_seconds,
+)
+paper_trader = PaperTradingService(
+    settings.paper_state_file,
+    enabled=settings.paper_auto_enabled,
+    starting_balance=settings.paper_starting_balance,
+    risk_per_trade_pct=settings.paper_risk_per_trade_pct,
+    max_open_positions=settings.paper_max_open_positions,
+    minimum_opportunity_score=settings.paper_min_opportunity_score,
+    commission_bps=settings.paper_commission_bps,
+    slippage_bps=settings.paper_slippage_bps,
+    cycle_interval_seconds=settings.paper_cycle_interval_seconds,
+    max_position_minutes=settings.paper_max_position_minutes,
+)
+paper_cycle_lock = Lock()
 
 
 def refresh_mt5_connection() -> MT5ConnectionSnapshot:
@@ -134,16 +158,91 @@ def risk_engine(config: Settings = settings) -> RiskEngine:
     )
 
 
-def broker() -> PaperBroker | MT5Broker:
+def broker() -> PaperTradingService | MT5Broker:
     if settings.broker_adapter == "mt5":
         return MT5Broker(live_trading_unlocked())
-    return paper_broker
+    return paper_trader
+
+
+def run_paper_cycle(force: bool = False) -> PaperPortfolio:
+    with paper_cycle_lock:
+        account = account_registry.active_account()
+        result = market_scanner.scan(
+            account,
+            paper_trader.timeframe,
+            settings.market_scan_max_symbols,
+            settings.market_scan_max_symbols,
+            force,
+        )
+        if result.source != "mt5":
+            paper_trader.record_error(
+                "The virtual cycle was skipped because verified MT5 market data is unavailable."
+            )
+            return paper_trader.snapshot()
+        prices: dict[str, Candle] = {}
+        for position in paper_trader.positions():
+            candles = mt5_bridge.candles(
+                account,
+                position.symbol,
+                paper_trader.timeframe,
+                80,
+            )
+            if candles:
+                prices[position.symbol] = candles[-1]
+        portfolio = paper_trader.process_cycle(
+            result,
+            prices,
+            account.id if account else "",
+        )
+        OPEN_POSITIONS.set(portfolio.metrics.open_positions)
+        return portfolio
+
+
+def run_extreme_cycle(force: bool = False) -> ExtremeScanResult:
+    with paper_cycle_lock:
+        return extreme_scanner.scan(
+            account_registry.active_account(),
+            paper_trader.timeframe,
+            settings.market_scan_max_symbols,
+            settings.market_scan_max_symbols,
+            force,
+        )
+
+
+async def paper_trading_loop() -> None:
+    await asyncio.sleep(3)
+    while True:
+        if paper_trader.enabled:
+            try:
+                await asyncio.to_thread(run_paper_cycle)
+            except Exception as exc:
+                paper_trader.record_error(f"Virtual cycle failed: {exc}")
+        await asyncio.sleep(paper_trader.cycle_interval_seconds)
+
+
+async def extreme_scanning_loop() -> None:
+    await asyncio.sleep(8)
+    while True:
+        if settings.extreme_scan_enabled:
+            with suppress(Exception):
+                await asyncio.to_thread(run_extreme_cycle)
+        await asyncio.sleep(settings.extreme_scan_interval_seconds)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    yield
-    mt5_bridge.shutdown()
+    paper_task = asyncio.create_task(paper_trading_loop())
+    extreme_task = asyncio.create_task(extreme_scanning_loop())
+    try:
+        yield
+    finally:
+        paper_task.cancel()
+        extreme_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await paper_task
+        with suppress(asyncio.CancelledError):
+            await extreme_task
+        mt5_bridge.shutdown()
 
 
 app = FastAPI(
@@ -315,9 +414,77 @@ def scan_market(
     return MarketScanDTO.model_validate(result)
 
 
+@app.get("/extreme/scan", response_model=ExtremeScanDTO)
+def scan_extreme_levels(
+    timeframe: str = Query(default="1m"),
+    limit: int = Query(default=50, ge=1, le=200),
+    force: bool = Query(default=False),
+) -> ExtremeScanDTO:
+    result = extreme_scanner.scan(
+        account_registry.active_account(),
+        timeframe,
+        settings.market_scan_max_symbols,
+        limit,
+        force,
+    )
+    return ExtremeScanDTO.model_validate(result)
+
+
 @app.get("/strategy", response_model=StrategyDTO)
 def strategy() -> StrategyDTO:
     return StrategyDTO.model_validate(signal_engine.definition())
+
+
+@app.get("/paper/portfolio", response_model=PaperPortfolioDTO)
+def paper_portfolio() -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(paper_trader.snapshot())
+
+
+@app.post("/paper/control", response_model=PaperPortfolioDTO)
+def control_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
+    portfolio = paper_trader.update_control(
+        enabled=payload.enabled,
+        timeframe=payload.timeframe,
+        minimum_opportunity_score=payload.minimum_opportunity_score,
+        max_open_positions=payload.max_open_positions,
+    )
+    return PaperPortfolioDTO.model_validate(portfolio)
+
+
+@app.post("/paper/cycle", response_model=PaperPortfolioDTO)
+def cycle_paper_trading(force: bool = Query(default=False)) -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(run_paper_cycle(force))
+
+
+@app.post("/paper/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
+def close_paper_position(trade_id: str) -> PaperPortfolioDTO:
+    position = next(
+        (item for item in paper_trader.positions() if item.id == trade_id),
+        None,
+    )
+    if position is None:
+        raise HTTPException(status_code=404, detail="Open virtual position not found.")
+    candles = mt5_bridge.candles(
+        account_registry.active_account(),
+        position.symbol,
+        paper_trader.timeframe,
+        80,
+    )
+    if not candles:
+        raise HTTPException(
+            status_code=409,
+            detail="A verified current MT5 price is required to close the virtual position.",
+        )
+    return PaperPortfolioDTO.model_validate(
+        paper_trader.close_trade(trade_id, candles[-1].close)
+    )
+
+
+@app.post("/paper/reset", response_model=PaperPortfolioDTO)
+def reset_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
+    if payload.confirmation != "RESET PAPER ACCOUNT":
+        raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
+    return PaperPortfolioDTO.model_validate(paper_trader.reset())
 
 
 @app.get("/candles/{symbol}", response_model=list[CandleDTO])

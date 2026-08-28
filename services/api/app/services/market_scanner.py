@@ -1,5 +1,6 @@
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
+from threading import RLock
 
 from app.domain.models import Direction, Signal, SignalReason
 from app.services.accounts import BrokerAccountProfile
@@ -15,6 +16,9 @@ class MarketOpportunity:
     category: str
     direction: Direction
     confidence: float
+    entry: float
+    stop_loss: float | None
+    take_profit: float | None
     opportunity_score: float
     estimated_move_pct: float
     spread_pct: float
@@ -48,6 +52,7 @@ class MarketOpportunityScanner:
         self._cache_key = ""
         self._cached_at: datetime | None = None
         self._cached: MarketScanResult | None = None
+        self._lock = RLock()
 
     def scan(
         self,
@@ -56,6 +61,23 @@ class MarketOpportunityScanner:
         max_symbols: int,
         result_limit: int,
         force: bool = False,
+    ) -> MarketScanResult:
+        with self._lock:
+            return self._scan_unlocked(
+                account,
+                timeframe,
+                max_symbols,
+                result_limit,
+                force,
+            )
+
+    def _scan_unlocked(
+        self,
+        account: BrokerAccountProfile | None,
+        timeframe: str,
+        max_symbols: int,
+        result_limit: int,
+        force: bool,
     ) -> MarketScanResult:
         now = datetime.now(UTC)
         key = f"{account.id if account else 'none'}:{timeframe}:{max_symbols}"
@@ -156,6 +178,9 @@ class MarketOpportunityScanner:
             category=symbol.category,
             direction=direction,
             confidence=confidence,
+            entry=entry,
+            stop_loss=signal.stop_loss,
+            take_profit=signal.take_profit,
             opportunity_score=score_value,
             estimated_move_pct=round(estimated_move_pct, 3),
             spread_pct=round(spread_pct, 4),

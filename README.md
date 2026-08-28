@@ -11,6 +11,8 @@ This project is **not** a profit guarantee and does not ship with live trading e
 - Signal-only and auto-trade modes, with auto-trade locked behind server-side live-trading guardrails.
 - Explainable signal engine with trend, momentum, volatility, risk, and event/news rationale.
 - Paper broker as the default execution engine.
+- Persistent virtual trading ledger that opens, marks, closes, and reports every eligible paper
+  position with entry, exit, fees, risk, R-multiple, MFE/MAE, equity, and decision history.
 - MT5/JustMarkets integration boundary with a disabled-by-default adapter contract.
 - Persistent multi-account profiles with masked logins and an in-workstation account selector.
 - Windows MT5 read-only bridge for verified account metrics, broker quotes, and open positions.
@@ -20,6 +22,8 @@ This project is **not** a profit guarantee and does not ship with live trading e
 - Read-only MT5 economic-calendar exporter for scheduled USD macro events.
 - Whole-broker market scan across every tradeable MT5 instrument, ranked by signal quality,
   spread cost, quote freshness, and current market availability.
+- Separate 85/15 extreme monitor combining RSI(1), MACD(5,6,1), and moving-average context, with
+  threshold-entry alerts, cooldowns, browser sound, and optional voice announcements.
 - Searchable left market drawer for adding, removing, and drag-ordering charts with local
   persistence.
 - Chart zoom controls and candle inspection with exact start/end time, OHLC, and volume.
@@ -102,6 +106,8 @@ BROKER_ADAPTER=paper
 - [MT5 and JustMarkets Integration](docs/mt5-justmarkets.md)
 - [News Analysis](docs/news-analysis.md)
 - [Whole-Market Scanner](docs/market-scanner.md)
+- [Virtual Paper Trading](docs/paper-trading.md)
+- [85/15 Extreme Scanner](docs/extreme-scanner.md)
 - [Operations Runbook](docs/operations.md)
 
 ## Repository Layout

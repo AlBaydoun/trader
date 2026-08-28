@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChartPanel } from "./components/ChartPanel";
+import { ExtremeAlertsPanel } from "./components/ExtremeAlertsPanel";
+import { PaperTradingPanel } from "./components/PaperTradingPanel";
 import { SignalRail } from "./components/SignalRail";
 import { SymbolDrawer } from "./components/SymbolDrawer";
 import { WorkspaceHeader } from "./components/WorkspaceHeader";
@@ -10,13 +12,19 @@ import {
   getMT5Quotes,
   getMarketSymbols,
   getNewsAnalysis,
+  getPaperPortfolio,
+  scanExtremeLevels,
   getStatus,
   getStrategy,
   scan,
   scanWholeMarket,
-  setActiveAccount
+  setActiveAccount,
+  closePaperPosition,
+  resetPaperPortfolio,
+  runPaperCycle,
+  updatePaperControl
 } from "./lib/api";
-import { playSignalTone, speakSignal } from "./lib/alerts";
+import { playExtremeAlert, playSignalTone, speakExtremeAlert, speakSignal } from "./lib/alerts";
 import type {
   AccountList,
   Backtest,
@@ -26,6 +34,9 @@ import type {
   MarketSymbol,
   MT5Quote,
   NewsStatus,
+  PaperControl,
+  PaperPortfolio,
+  ExtremeScan,
   Signal,
   Status,
   StrategyDefinition,
@@ -51,11 +62,17 @@ export function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [marketScanning, setMarketScanning] = useState(false);
   const [activeSymbol, setActiveSymbol] = useState("XAUUSD");
-  const [tradeMode, setTradeMode] = useState<TradeMode>("signal_only");
+  const [tradeMode, setTradeMode] = useState<TradeMode>("auto_trade");
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [backtest, setBacktest] = useState<Backtest | undefined>();
+  const [paperPortfolio, setPaperPortfolio] = useState<PaperPortfolio>();
+  const [paperBusy, setPaperBusy] = useState(false);
+  const [paperError, setPaperError] = useState("");
+  const [extremeScan, setExtremeScan] = useState<ExtremeScan>();
+  const [extremeBusy, setExtremeBusy] = useState(false);
+  const extremeAlertIdsRef = useRef<Set<string>>(new Set());
   const lastAlertRef = useRef<string>("");
 
   const activeSignal = signals[activeSymbol] ?? Object.values(signals)[0];
@@ -92,6 +109,19 @@ export function App() {
   useEffect(() => {
     getStrategy().then(setStrategy).catch(() => setStrategy(undefined));
   }, []);
+
+  const refreshPaper = useCallback(async () => {
+    const portfolio = await getPaperPortfolio().catch(() => null);
+    if (!portfolio) return;
+    setPaperPortfolio(portfolio);
+    setTradeMode(portfolio.engine.enabled ? "auto_trade" : "signal_only");
+  }, []);
+
+  useEffect(() => {
+    void refreshPaper();
+    const interval = window.setInterval(() => void refreshPaper(), 10000);
+    return () => window.clearInterval(interval);
+  }, [refreshPaper]);
 
   const refreshMarket = useCallback(async () => {
     setMarketScanning(true);
@@ -165,6 +195,30 @@ export function App() {
     if (voiceEnabled) speakSignal(activeSignal);
   }, [activeSignal, soundEnabled, voiceEnabled]);
 
+  const refreshExtreme = useCallback(async (force = false) => {
+    const result = await scanExtremeLevels(timeframe, force).catch(() => null);
+    if (!result) return;
+    setExtremeScan(result);
+    for (const alert of result.alerts) {
+      if (extremeAlertIdsRef.current.has(alert.id)) continue;
+      extremeAlertIdsRef.current.add(alert.id);
+      if (soundEnabled) playExtremeAlert(alert);
+      if (voiceEnabled) speakExtremeAlert(alert);
+    }
+    if (extremeAlertIdsRef.current.size > 500) {
+      extremeAlertIdsRef.current = new Set(result.recent_alerts.map((alert) => alert.id));
+    }
+  }, [soundEnabled, timeframe, voiceEnabled]);
+
+  useEffect(() => {
+    const startup = window.setTimeout(() => void refreshExtreme(), 3500);
+    const interval = window.setInterval(() => void refreshExtreme(), 15000);
+    return () => {
+      window.clearTimeout(startup);
+      window.clearInterval(interval);
+    };
+  }, [refreshExtreme]);
+
   useEffect(() => {
     if (!activeSymbol) return;
     getBacktest(activeSymbol, timeframe)
@@ -224,6 +278,88 @@ export function App() {
     }
   }
 
+  async function controlPaper(control: PaperControl) {
+    setPaperBusy(true);
+    setPaperError("");
+    try {
+      const portfolio = await updatePaperControl(control);
+      setPaperPortfolio(portfolio);
+      setTradeMode(portfolio.engine.enabled ? "auto_trade" : "signal_only");
+    } catch (error) {
+      setPaperError(error instanceof Error ? error.message : "Virtual control update failed.");
+    } finally {
+      setPaperBusy(false);
+    }
+  }
+
+  async function runVirtualCycle() {
+    setPaperBusy(true);
+    setPaperError("");
+    try {
+      setPaperPortfolio(await runPaperCycle(true));
+    } catch (error) {
+      setPaperError(error instanceof Error ? error.message : "Virtual market cycle failed.");
+    } finally {
+      setPaperBusy(false);
+    }
+  }
+
+  async function runExtremeScan() {
+    setExtremeBusy(true);
+    try {
+      await refreshExtreme(true);
+    } finally {
+      setExtremeBusy(false);
+    }
+  }
+
+  async function closeVirtualPosition(tradeId: string) {
+    setPaperBusy(true);
+    setPaperError("");
+    try {
+      setPaperPortfolio(await closePaperPosition(tradeId));
+    } catch (error) {
+      setPaperError(error instanceof Error ? error.message : "Virtual position could not close.");
+    } finally {
+      setPaperBusy(false);
+    }
+  }
+
+  async function resetVirtualPortfolio() {
+    if (!window.confirm("Reset all virtual trades, history, and performance results?")) return;
+    setPaperBusy(true);
+    setPaperError("");
+    try {
+      setPaperPortfolio(await resetPaperPortfolio());
+    } catch (error) {
+      setPaperError(error instanceof Error ? error.message : "Virtual portfolio reset failed.");
+    } finally {
+      setPaperBusy(false);
+    }
+  }
+
+  function openPaperPanel() {
+    const panel = document.getElementById("paper-trading");
+    const header = document.querySelector<HTMLElement>(".workspace-header");
+    if (!panel) return;
+    const headerHeight = header?.getBoundingClientRect().height ?? 0;
+    window.scrollTo({
+      top: Math.max(0, panel.offsetTop - headerHeight - 8),
+      behavior: "smooth"
+    });
+  }
+
+  function openExtremePanel() {
+    const panel = document.getElementById("extreme-alerts");
+    const header = document.querySelector<HTMLElement>(".workspace-header");
+    if (!panel) return;
+    const headerHeight = header?.getBoundingClientRect().height ?? 0;
+    window.scrollTo({
+      top: Math.max(0, panel.offsetTop - headerHeight - 8),
+      behavior: "smooth"
+    });
+  }
+
   return (
     <main className="app-shell">
       <SymbolDrawer
@@ -249,10 +385,15 @@ export function App() {
         activeAccountId={accounts.active_account_id}
         switchingAccount={switchingAccount}
         scanning={scanning}
+        paperEnabled={Boolean(paperPortfolio?.engine.enabled)}
+        paperOpenPositions={paperPortfolio?.metrics.open_positions ?? 0}
+        extremeAlertCount={extremeScan?.alerts.length ?? 0}
         onOpenSymbols={() => setDrawerOpen(true)}
         onTimeframeChange={setTimeframe}
         onAccountChange={(accountId) => void switchAccount(accountId)}
         onRefresh={() => void refresh()}
+        onOpenPaper={openPaperPanel}
+        onOpenExtreme={openExtremePanel}
       />
 
       <div className="workstation">
@@ -283,11 +424,27 @@ export function App() {
           mt5Quotes={mt5Quotes}
           soundEnabled={soundEnabled}
           voiceEnabled={voiceEnabled}
-          onTradeModeChange={setTradeMode}
+          onTradeModeChange={(mode) => void controlPaper({ enabled: mode === "auto_trade" })}
           onSoundToggle={() => setSoundEnabled((enabled) => !enabled)}
           onVoiceToggle={() => setVoiceEnabled((enabled) => !enabled)}
         />
       </div>
+      <PaperTradingPanel
+        portfolio={paperPortfolio}
+        busy={paperBusy}
+        error={paperError}
+        onControl={(control) => void controlPaper(control)}
+        onRun={() => void runVirtualCycle()}
+        onClose={(tradeId) => void closeVirtualPosition(tradeId)}
+        onReset={() => void resetVirtualPortfolio()}
+      />
+      <ExtremeAlertsPanel
+        scan={extremeScan}
+        busy={extremeBusy}
+        soundEnabled={soundEnabled}
+        voiceEnabled={voiceEnabled}
+        onRun={() => void runExtremeScan()}
+      />
     </main>
   );
 }

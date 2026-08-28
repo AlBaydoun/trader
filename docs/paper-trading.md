@@ -1,0 +1,42 @@
+# Virtual Paper Trading
+
+The workstation starts in paper mode. The virtual engine uses current read-only MT5 candles and
+quotes, but it never submits an order, changes an MT5 position, or uses real money.
+
+## What It Does
+
+When enabled, the API runs a cycle every `PAPER_CYCLE_INTERVAL_SECONDS` (60 seconds by default):
+
+1. Scans every tradeable symbol exposed by the active MT5 terminal.
+2. Updates each open virtual position using the latest candle.
+3. Closes positions on stop loss, take profit, opposite signal, or the configured time limit.
+4. Opens eligible directional opportunities up to `PAPER_MAX_OPEN_POSITIONS`.
+5. Records the decision, simulated costs, equity curve, and detailed trade result.
+
+The default risk budget is `PAPER_RISK_PER_TRADE_PCT=0.1`, with a 50-position cap. These limits
+are intentionally conservative defaults for observing behavior, not a performance claim. The
+paper ledger is stored at `PAPER_STATE_FILE` and survives API restarts.
+
+## Workstation Controls
+
+Use the `Paper` button in the header to open the virtual results section. It shows:
+
+- Virtual equity, balance, realized and unrealized result, fees, drawdown, win rate, profit factor,
+  average R, and open risk.
+- An equity curve and the current position list with entry, current price, stop, target, quantity,
+  risk, result, R-multiple, confidence, and strategy reasons.
+- Closed-trade history including exit reason, duration, return, MFE, MAE, and costs.
+- A decision log showing cycles, opens, closes, controls, and errors.
+
+`Run now` starts a cycle immediately. `Reset` requires the exact confirmation shown in the dialog
+and clears the virtual ledger only. The auto toggle pauses or resumes future virtual cycles without
+changing historical results.
+
+## Safety Boundary
+
+The paper service is separate from the live broker adapter. The API's live trading lock still
+requires explicit live configuration, acknowledgement, a non-read-only MT5 bridge, and a risk
+approval. The paper engine does not bypass or weaken those controls.
+
+Virtual fills are modeled from observed candle prices, so they are not a substitute for broker
+execution quality, spread behavior, slippage, latency, or a validated backtest.

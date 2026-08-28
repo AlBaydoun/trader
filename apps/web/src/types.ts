@@ -203,6 +203,9 @@ export interface MarketOpportunity {
   category: string;
   direction: Direction;
   confidence: number;
+  entry: number;
+  stop_loss: number | null;
+  take_profit: number | null;
   opportunity_score: number;
   estimated_move_pct: number;
   spread_pct: number;
@@ -233,4 +236,166 @@ export interface StrategyDefinition {
   target_model: string;
   adaptive_learning: boolean;
   caveat: string;
+}
+
+export interface PaperTrade {
+  id: string;
+  symbol: string;
+  direction: "buy" | "sell";
+  timeframe: string;
+  status: "open" | "closed";
+  quantity: number;
+  entry_price: number;
+  current_price: number;
+  stop_loss: number | null;
+  take_profit: number | null;
+  risk_amount: number;
+  entry_fee: number;
+  exit_fee: number;
+  gross_pnl: number;
+  net_pnl: number;
+  unrealized_pnl: number;
+  return_pct: number;
+  r_multiple: number;
+  confidence: number;
+  opportunity_score: number;
+  scan_rank: number;
+  reasons: string[];
+  source: string;
+  source_account_id: string;
+  opened_at: string;
+  updated_at: string;
+  closed_at: string | null;
+  exit_price: number | null;
+  exit_reason: "stop_loss" | "take_profit" | "signal_reversal" | "time_limit" | "operator" | null;
+  max_favorable_excursion: number;
+  max_adverse_excursion: number;
+}
+
+export interface PaperDecision {
+  id: string;
+  cycle_id: string;
+  created_at: string;
+  action: "cycle" | "opened" | "closed" | "error" | "control";
+  outcome: string;
+  reason: string;
+  symbol: string | null;
+  trade_id: string | null;
+  signal_direction: Direction | null;
+  opportunity_score: number | null;
+}
+
+export interface PaperEquityPoint {
+  timestamp: string;
+  equity: number;
+  balance: number;
+  unrealized_pnl: number;
+}
+
+export interface PaperEngineStatus {
+  enabled: boolean;
+  virtual_only: boolean;
+  timeframe: string;
+  minimum_opportunity_score: number;
+  max_open_positions: number;
+  risk_per_trade_pct: number;
+  cycle_interval_seconds: number;
+  cycle_count: number;
+  last_cycle_at: string | null;
+  last_scan_at: string | null;
+  next_cycle_at: string | null;
+  last_error: string;
+  market_source: string;
+  source_account_id: string;
+  scanned_symbols: number;
+  eligible_candidates: number;
+  opened_last_cycle: number;
+  closed_last_cycle: number;
+}
+
+export interface PaperMetrics {
+  starting_balance: number;
+  balance: number;
+  equity: number;
+  realized_pnl: number;
+  unrealized_pnl: number;
+  total_return_pct: number;
+  open_positions: number;
+  closed_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  win_rate: number;
+  profit_factor: number | null;
+  average_r_multiple: number;
+  max_drawdown_pct: number;
+  open_risk_amount: number;
+  fees_paid: number;
+  best_trade: number | null;
+  worst_trade: number | null;
+}
+
+export interface PaperPortfolio {
+  engine: PaperEngineStatus;
+  metrics: PaperMetrics;
+  open_positions: PaperTrade[];
+  closed_trades: PaperTrade[];
+  decisions: PaperDecision[];
+  equity_curve: PaperEquityPoint[];
+  disclaimer: string;
+}
+
+export interface PaperControl {
+  enabled?: boolean;
+  timeframe?: "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
+  minimum_opportunity_score?: number;
+  max_open_positions?: number;
+}
+
+export type ExtremeLevel = "upper_85" | "lower_15" | "neutral";
+
+export interface ExtremeReading {
+  symbol: string;
+  price: number;
+  score: number;
+  level: ExtremeLevel;
+  rsi1: number;
+  macd: number;
+  macd_signal: number;
+  macd_histogram: number;
+  ema_fast: number;
+  ema_slow: number;
+  recommendation: string;
+  reasons: string[];
+  source: string;
+  detected_at: string;
+}
+
+export interface ExtremeAlert {
+  id: string;
+  symbol: string;
+  level: "upper_85" | "lower_15";
+  score: number;
+  rsi1: number;
+  macd: number;
+  macd_signal: number;
+  ema_fast: number;
+  ema_slow: number;
+  recommendation: string;
+  reasons: string[];
+  triggered_at: string;
+  source: string;
+}
+
+export interface ExtremeScan {
+  source: string;
+  timeframe: string;
+  available_symbols: number;
+  scanned_symbols: number;
+  generated_at: string;
+  upper_level: number;
+  lower_level: number;
+  readings: ExtremeReading[];
+  alerts: ExtremeAlert[];
+  recent_alerts: ExtremeAlert[];
+  disclaimer: string;
 }

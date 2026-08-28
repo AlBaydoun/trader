@@ -147,3 +147,12 @@ def test_strategy_endpoint_explains_active_rules(account_registry: AccountRegist
     assert payload["name"] == "Trend, Momentum and Structure"
     assert payload["adaptive_learning"] is False
     assert len(payload["components"]) == 4
+
+
+def test_paper_portfolio_is_explicitly_virtual(account_registry: AccountRegistry) -> None:
+    response = client.get("/paper/portfolio")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["engine"]["virtual_only"] is True
+    assert "do not place MT5 orders" in payload["disclaimer"]

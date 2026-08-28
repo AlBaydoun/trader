@@ -189,20 +189,20 @@ export function SignalRail({
             type="button"
             onClick={() => onTradeModeChange("signal_only")}
           >
-            Signal
+            Signals only
           </button>
           <button
             className={tradeMode === "auto_trade" ? "active" : ""}
             type="button"
             onClick={() => onTradeModeChange("auto_trade")}
           >
-            Auto
+            Auto virtual
           </button>
         </div>
         <p className="guardrail-copy">
           {liveUnlocked
-            ? "Live trading is unlocked on the server and still checked by risk rules."
-            : "Live trading is locked. Orders run in paper mode unless explicitly configured."}
+            ? "Virtual automation is separate. The server reports live trading unlocked, so review configuration before using any real-order endpoint."
+            : "Auto virtual simulates eligible trades only. Real MT5 order placement remains locked."}
         </p>
       </section>
 

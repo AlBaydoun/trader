@@ -22,6 +22,22 @@ class Settings(BaseSettings):
     market_scan_max_symbols: int = Field(default=500, ge=10, le=2000)
     market_scan_cache_seconds: int = Field(default=300, ge=15, le=3600)
 
+    paper_auto_enabled: bool = True
+    paper_state_file: str = "../../data/paper-trading.json"
+    paper_starting_balance: float = Field(default=10000.0, gt=0)
+    paper_risk_per_trade_pct: float = Field(default=0.1, ge=0.01, le=2.0)
+    paper_max_open_positions: int = Field(default=50, ge=1, le=200)
+    paper_min_opportunity_score: float = Field(default=0.0, ge=0.0, le=100.0)
+    paper_commission_bps: float = Field(default=1.0, ge=0.0, le=100.0)
+    paper_slippage_bps: float = Field(default=1.0, ge=0.0, le=100.0)
+    paper_cycle_interval_seconds: int = Field(default=60, ge=15, le=3600)
+    paper_max_position_minutes: int = Field(default=240, ge=1, le=43200)
+
+    extreme_scan_enabled: bool = True
+    extreme_scan_cache_seconds: int = Field(default=10, ge=5, le=300)
+    extreme_scan_interval_seconds: int = Field(default=15, ge=10, le=3600)
+    extreme_alert_cooldown_seconds: int = Field(default=300, ge=30, le=86400)
+
     news_provider: str = "auto"
     news_api_key: str = ""
     mt5_calendar_file: str = ""

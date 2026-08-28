@@ -1,4 +1,4 @@
-import { Activity, CircleUserRound, LayoutGrid, Menu, RefreshCw, ShieldCheck } from "lucide-react";
+import { Activity, BellRing, CircleUserRound, FlaskConical, LayoutGrid, Menu, RefreshCw, ShieldCheck } from "lucide-react";
 import type { BrokerAccount, MT5Connection, TradeMode } from "../types";
 
 interface WorkspaceHeaderProps {
@@ -12,10 +12,15 @@ interface WorkspaceHeaderProps {
   activeAccountId: string | null;
   switchingAccount: boolean;
   scanning: boolean;
+  paperEnabled: boolean;
+  paperOpenPositions: number;
+  extremeAlertCount: number;
   onOpenSymbols: () => void;
   onTimeframeChange: (timeframe: string) => void;
   onAccountChange: (accountId: string) => void;
   onRefresh: () => void;
+  onOpenPaper: () => void;
+  onOpenExtreme: () => void;
 }
 
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"];
@@ -31,10 +36,15 @@ export function WorkspaceHeader({
   activeAccountId,
   switchingAccount,
   scanning,
+  paperEnabled,
+  paperOpenPositions,
+  extremeAlertCount,
   onOpenSymbols,
   onTimeframeChange,
   onAccountChange,
-  onRefresh
+  onRefresh,
+  onOpenPaper,
+  onOpenExtreme
 }: WorkspaceHeaderProps) {
   return (
     <header className="workspace-header">
@@ -76,6 +86,14 @@ export function WorkspaceHeader({
           <LayoutGrid size={15} />
           {selectedCount} charts
         </button>
+        <button className="icon-text paper-jump" type="button" onClick={onOpenPaper}>
+          <FlaskConical size={15} />
+          Paper {paperOpenPositions}
+        </button>
+        <button className="icon-text extreme-jump" type="button" onClick={onOpenExtreme}>
+          <BellRing size={15} />
+          Alerts {extremeAlertCount}
+        </button>
       </div>
 
       <div className="status-pill">
@@ -113,10 +131,10 @@ export function WorkspaceHeader({
             </span>
           </div>
         )}
-        <LayoutGrid size={15} />
-        <span>{tradeMode === "auto_trade" ? "Auto mode" : "Signal mode"}</span>
+        <FlaskConical size={15} />
+        <span>{paperEnabled && tradeMode === "auto_trade" ? "Virtual auto" : "Signals only"}</span>
         <ShieldCheck size={15} />
-        <span>{liveUnlocked ? "Live unlocked" : "Paper locked"}</span>
+        <span>{liveUnlocked ? "Live unlocked" : "Real money locked"}</span>
       </div>
     </header>
   );
