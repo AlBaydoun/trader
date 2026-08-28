@@ -181,6 +181,49 @@ export interface Backtest {
   source: "demo" | "mt5";
 }
 
+export interface ExtremeBacktestTrade {
+  direction: "buy" | "sell";
+  signal_at: string;
+  entry_at: string;
+  exit_at: string;
+  signal_price: number;
+  entry_price: number;
+  exit_price: number;
+  stop_loss: number;
+  take_profit: number;
+  outcome: "win" | "loss" | "flat";
+  exit_reason: "stop_loss" | "take_profit" | "time_limit" | "data_end";
+  return_pct: number;
+  r_multiple: number;
+  score: number;
+  reasons: string[];
+}
+
+export interface ExtremeBacktest {
+  symbol: string;
+  timeframe: string;
+  source: "demo" | "mt5";
+  bars_tested: number;
+  signals: number;
+  trades: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  net_return_pct: number;
+  max_drawdown_pct: number;
+  profit_factor: number | null;
+  total_r: number;
+  average_r_multiple: number;
+  data_start: string;
+  data_end: string;
+  stop_atr_multiple: number;
+  target_r_multiple: number;
+  max_hold_bars: number;
+  parameters: string[];
+  assumptions: string[];
+  trades_detail: ExtremeBacktestTrade[];
+}
+
 export interface MarketSymbol {
   symbol: string;
   description: string;

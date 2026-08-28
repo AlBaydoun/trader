@@ -874,6 +874,99 @@ button:disabled {
   gap: 8px;
 }
 
+.backtest-window {
+  margin: -2px 0 10px;
+  color: #8a98a6;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.history-range-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #8a98a6;
+  font-size: 11px;
+}
+
+.history-range-control .segmented {
+  flex: 0 0 auto;
+}
+
+.history-range-control .segmented button {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.history-details {
+  margin-top: 10px;
+  border-top: 1px solid #26313a;
+  padding-top: 9px;
+}
+
+.history-details summary {
+  color: #dce5eb;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.history-trade-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.history-trade-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(44, 57, 67, 0.65);
+  font-size: 11px;
+}
+
+.history-trade-row > div {
+  display: grid;
+  gap: 2px;
+}
+
+.history-trade-row > div:last-child {
+  text-align: right;
+}
+
+.history-trade-row span {
+  color: #8a98a6;
+}
+
+.history-trade-row strong.buy {
+  color: #62e0b8;
+}
+
+.history-trade-row strong.sell {
+  color: #ff8ea0;
+}
+
+.history-trade-row strong.positive {
+  color: #62e0b8;
+}
+
+.history-trade-row strong.negative {
+  color: #ff8ea0;
+}
+
+.history-assumptions {
+  display: grid;
+  gap: 6px;
+  margin: 9px 0 0;
+  padding-left: 16px;
+  color: #8a98a6;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .metric {
   border: 1px solid #2c3943;
   background: #171d22;

@@ -14,6 +14,7 @@ import {
   getAccounts,
   getBacktest,
   getCandles,
+  getExtremeBacktest,
   getMT5Quotes,
   getMarketSymbols,
   getNewsAnalysis,
@@ -42,6 +43,7 @@ import type {
   AccountList,
   Backtest,
   Candle,
+  ExtremeBacktest,
   MarketEvent,
   MarketScan,
   MarketSymbol,
@@ -83,6 +85,8 @@ export function App() {
   const [extremeNotifications, setExtremeNotifications] = useState(loadExtremeNotificationPreferences);
   const [scanning, setScanning] = useState(false);
   const [backtest, setBacktest] = useState<Backtest | undefined>();
+  const [extremeBacktest, setExtremeBacktest] = useState<ExtremeBacktest | undefined>();
+  const [extremeHistoryLimit, setExtremeHistoryLimit] = useState(2000);
   const [paperPortfolio, setPaperPortfolio] = useState<PaperPortfolio>();
   const [paperBusy, setPaperBusy] = useState(false);
   const [paperError, setPaperError] = useState("");
@@ -276,10 +280,14 @@ export function App() {
 
   useEffect(() => {
     if (!activeSymbol) return;
-    getBacktest(activeSymbol, timeframe)
-      .then(setBacktest)
-      .catch(() => setBacktest(undefined));
-  }, [activeSymbol, timeframe]);
+    Promise.all([
+      getBacktest(activeSymbol, timeframe).catch(() => undefined),
+      getExtremeBacktest(activeSymbol, timeframe, extremeHistoryLimit).catch(() => undefined)
+    ]).then(([baseResult, extremeResult]) => {
+      setBacktest(baseResult);
+      setExtremeBacktest(extremeResult);
+    });
+  }, [activeSymbol, extremeHistoryLimit, timeframe]);
 
   const gridClass = useMemo(() => {
     if (selectedSymbols.length <= 1) return "charts-grid one";
@@ -566,6 +574,9 @@ export function App() {
         <SignalRail
           activeSignal={activeSignal}
           backtest={backtest}
+          extremeBacktest={extremeBacktest}
+          extremeHistoryLimit={extremeHistoryLimit}
+          onExtremeHistoryLimitChange={setExtremeHistoryLimit}
           events={events}
           newsStatus={newsStatus}
           activeSymbol={activeSymbol}

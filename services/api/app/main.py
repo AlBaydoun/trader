@@ -24,6 +24,7 @@ from app.schemas import (
     BacktestDTO,
     BrokerAccountDTO,
     CandleDTO,
+    ExtremeBacktestDTO,
     ExtremeScanDTO,
     MarketScanDTO,
     MarketSymbolDTO,
@@ -45,6 +46,7 @@ from app.schemas import (
 )
 from app.services.accounts import AccountRegistry, BrokerAccountProfile
 from app.services.backtest import BacktestService
+from app.services.extreme_backtest import ExtremeBacktestService
 from app.services.extreme_paper_trading import ExtremePaperTradingService
 from app.services.extreme_scanner import ExtremeScanResult, ExtremeSignalScanner
 from app.services.market_data import MarketDataService
@@ -65,6 +67,7 @@ news_service = NewsService(
     calendar_file=settings.mt5_calendar_file,
 )
 backtests = BacktestService(signal_engine)
+extreme_backtests = ExtremeBacktestService()
 account_registry = AccountRegistry.from_settings(settings)
 mt5_bridge = MT5ReadOnlyBridge(
     enabled=settings.mt5_read_only_enabled,
@@ -747,3 +750,22 @@ def positions() -> list[PositionDTO]:
 def backtest(symbol: str, timeframe: str = Query(default="1m")) -> BacktestDTO:
     result = backtests.run(market_candles(symbol, timeframe, 500))
     return BacktestDTO.model_validate(result.__dict__)
+
+
+@app.get("/backtests/extreme/{symbol}", response_model=ExtremeBacktestDTO)
+def extreme_backtest(
+    symbol: str,
+    timeframe: str = Query(default="1m"),
+    limit: int = Query(default=2000, ge=200, le=10000),
+    max_hold_bars: int = Query(default=15, ge=1, le=240),
+) -> ExtremeBacktestDTO:
+    if timeframe != "1m":
+        raise HTTPException(
+            status_code=422,
+            detail="TraderAI_M1_ExtremeScalp historical testing is available on the M1 timeframe.",
+        )
+    result = extreme_backtests.run(
+        market_candles(symbol, timeframe, limit),
+        max_hold_bars=max_hold_bars,
+    )
+    return ExtremeBacktestDTO.model_validate(result.__dict__)

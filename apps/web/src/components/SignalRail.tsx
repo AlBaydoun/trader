@@ -1,6 +1,8 @@
 import { Bell, Landmark, ListTree, MessageSquareText, ShieldAlert, Volume2 } from "lucide-react";
 import type {
   Backtest,
+  ExtremeBacktest,
+  ExtremeBacktestTrade,
   MarketEvent,
   MT5Connection,
   MT5Quote,
@@ -14,6 +16,8 @@ import { NewsAnalysisPanel } from "./NewsAnalysisPanel";
 interface SignalRailProps {
   activeSignal?: Signal;
   backtest?: Backtest;
+  extremeBacktest?: ExtremeBacktest;
+  extremeHistoryLimit: number;
   events: MarketEvent[];
   newsStatus?: NewsStatus;
   activeSymbol: string;
@@ -27,11 +31,14 @@ interface SignalRailProps {
   onTradeModeChange: (mode: TradeMode) => void;
   onSoundToggle: () => void;
   onVoiceToggle: () => void;
+  onExtremeHistoryLimitChange: (limit: number) => void;
 }
 
 export function SignalRail({
   activeSignal,
   backtest,
+  extremeBacktest,
+  extremeHistoryLimit,
   events,
   newsStatus,
   activeSymbol,
@@ -44,7 +51,8 @@ export function SignalRail({
   voiceEnabled,
   onTradeModeChange,
   onSoundToggle,
-  onVoiceToggle
+  onVoiceToggle,
+  onExtremeHistoryLimitChange
 }: SignalRailProps) {
   return (
     <aside className="signal-rail">
@@ -243,6 +251,79 @@ export function SignalRail({
         )}
       </section>
 
+      <section className="rail-block extreme-history-block">
+        <div className="section-heading">
+          <h2>10/90 indicator history</h2>
+          {extremeBacktest && (
+            <span className={`source-badge ${extremeBacktest.source}`}>
+              {extremeBacktest.source === "mt5" ? "MT5 data" : "Demo data"}
+            </span>
+          )}
+        </div>
+        {extremeBacktest ? (
+          <>
+            <p className="backtest-window">
+              {extremeBacktest.symbol} M1 · {extremeBacktest.bars_tested.toLocaleString()} bars · {formatDate(extremeBacktest.data_start)} to {formatDate(extremeBacktest.data_end)}
+            </p>
+            <div className="history-range-control">
+              <span>History depth</span>
+              <div className="segmented compact" role="group" aria-label="Historical bar count">
+                {[2000, 5000, 10000].map((limit) => (
+                  <button
+                    className={extremeHistoryLimit === limit ? "active" : ""}
+                    key={limit}
+                    type="button"
+                    title={`Test the last ${limit.toLocaleString()} M1 bars`}
+                    onClick={() => onExtremeHistoryLimitChange(limit)}
+                  >
+                    {limit >= 1000 ? `${limit / 1000}K` : limit}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="metrics-grid">
+              <Metric label="Signals" value={extremeBacktest.signals.toString()} />
+              <Metric label="Win rate" value={`${Math.round(extremeBacktest.win_rate * 100)}%`} />
+              <Metric label="Net return" value={`${extremeBacktest.net_return_pct}%`} />
+              <Metric label="Drawdown" value={`${extremeBacktest.max_drawdown_pct}%`} />
+              <Metric label="Profit factor" value={extremeBacktest.profit_factor?.toString() ?? "--"} />
+              <Metric label="Total R" value={`${extremeBacktest.total_r}R`} />
+            </div>
+            <details className="history-details">
+              <summary>View recent simulated trades</summary>
+              {extremeBacktest.trades_detail.length ? (
+                <div className="history-trade-list">
+                  {extremeBacktest.trades_detail.slice(0, 8).map((trade) => (
+                    <div className="history-trade-row" key={`${trade.signal_at}-${trade.direction}`}>
+                      <div>
+                        <strong className={trade.direction}>{trade.direction.toUpperCase()}</strong>
+                        <span>{formatDate(trade.signal_at)}</span>
+                      </div>
+                      <div>
+                        <strong className={trade.outcome === "win" ? "positive" : trade.outcome === "loss" ? "negative" : ""}>
+                          {trade.r_multiple >= 0 ? "+" : ""}{trade.r_multiple}R
+                        </strong>
+                        <span>{formatExitReason(trade.exit_reason)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">No confirmed 10/90 entries were found in this history window.</p>
+              )}
+            </details>
+            <details className="history-details">
+              <summary>Rules and test assumptions</summary>
+              <ul className="history-assumptions">
+                {extremeBacktest.assumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}
+              </ul>
+            </details>
+          </>
+        ) : (
+          <p className="muted">Historical indicator data is loading.</p>
+        )}
+      </section>
+
     </aside>
   );
 }
@@ -263,4 +344,17 @@ function Metric({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
+}
+
+function formatExitReason(reason: ExtremeBacktestTrade["exit_reason"]): string {
+  return reason.replaceAll("_", " ");
 }

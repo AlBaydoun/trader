@@ -81,6 +81,20 @@ is written to `FILE_COMMON` as `TraderAI-mt5-paper-signals.csv` when a new confi
 The indicator is intentionally separate from `TraderCalendarBridge`; attach both to a chart when
 you want calendar export and chart signals at the same time.
 
+### Historical indicator testing
+
+The workstation's `10/90 indicator history` section is a separate historical simulation of the
+same M1 rules. It uses the selected symbol's available candles, evaluates only closed candles,
+enters at the next candle open, and reports signal count, simulated trades, win rate, net price
+return, drawdown, profit factor, total R, and recent trade outcomes.
+
+The test uses the indicator's 0.90 ATR stop and 1.15R target. A position is closed after 15 M1
+candles by default, and if a historical candle touches both stop and target, the stop is counted
+first. Candle history does not contain the exact spread and commission for every historical fill,
+so the report is a rule-validation estimate, not a broker statement or a profit forecast. Use MT5
+data for the selected JustMarkets account when the `MT5 data` badge is shown; a `Demo data` badge
+means the terminal was unavailable and the test is only an application fallback.
+
 ## Adapter Requirements
 
 A production adapter should:

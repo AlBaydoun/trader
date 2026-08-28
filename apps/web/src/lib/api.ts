@@ -2,6 +2,7 @@ import type {
   AccountList,
   Backtest,
   Candle,
+  ExtremeBacktest,
   MT5Position,
   MT5Quote,
   MarketScan,
@@ -162,4 +163,14 @@ export function resetExtremePaperPortfolio(): Promise<PaperPortfolio> {
 
 export function getBacktest(symbol: string, timeframe: string): Promise<Backtest> {
   return getJson<Backtest>(`/backtests/${encodeURIComponent(symbol)}?timeframe=${timeframe}`);
+}
+
+export function getExtremeBacktest(
+  symbol: string,
+  timeframe: string,
+  limit = 2000
+): Promise<ExtremeBacktest> {
+  return getJson<ExtremeBacktest>(
+    `/backtests/extreme/${encodeURIComponent(symbol)}?timeframe=${timeframe}&limit=${limit}&max_hold_bars=15`
+  );
 }

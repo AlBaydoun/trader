@@ -238,6 +238,49 @@ class BacktestDTO(APIModel):
     source: Literal["demo", "mt5"]
 
 
+class ExtremeBacktestTradeDTO(APIModel):
+    direction: Literal["buy", "sell"]
+    signal_at: datetime
+    entry_at: datetime
+    exit_at: datetime
+    signal_price: float
+    entry_price: float
+    exit_price: float
+    stop_loss: float
+    take_profit: float
+    outcome: Literal["win", "loss", "flat"]
+    exit_reason: Literal["stop_loss", "take_profit", "time_limit", "data_end"]
+    return_pct: float
+    r_multiple: float
+    score: int
+    reasons: list[str]
+
+
+class ExtremeBacktestDTO(APIModel):
+    symbol: str
+    timeframe: str
+    source: Literal["demo", "mt5"]
+    bars_tested: int
+    signals: int
+    trades: int
+    wins: int
+    losses: int
+    win_rate: float
+    net_return_pct: float
+    max_drawdown_pct: float
+    profit_factor: float | None
+    total_r: float
+    average_r_multiple: float
+    data_start: datetime
+    data_end: datetime
+    stop_atr_multiple: float
+    target_r_multiple: float
+    max_hold_bars: int
+    parameters: list[str]
+    assumptions: list[str]
+    trades_detail: list[ExtremeBacktestTradeDTO]
+
+
 class StrategyDTO(APIModel):
     name: str
     version: str

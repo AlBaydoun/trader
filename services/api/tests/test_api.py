@@ -156,3 +156,27 @@ def test_paper_portfolio_is_explicitly_virtual(account_registry: AccountRegistry
     payload = response.json()
     assert payload["engine"]["virtual_only"] is True
     assert "do not place MT5 orders" in payload["disclaimer"]
+
+
+def test_extreme_backtest_uses_verified_mt5_history(
+    account_registry: AccountRegistry,
+) -> None:
+    response = client.get(
+        "/backtests/extreme/XAUUSD",
+        params={"timeframe": "1m", "limit": 200, "max_hold_bars": 15},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "mt5"
+    assert payload["bars_tested"] == 200
+    assert "RSI(1) extremes 10/90 over 3 bars" in payload["parameters"]
+    assert isinstance(payload["trades_detail"], list)
+
+
+def test_extreme_backtest_rejects_non_m1_timeframes(
+    account_registry: AccountRegistry,
+) -> None:
+    response = client.get("/backtests/extreme/XAUUSD", params={"timeframe": "5m"})
+
+    assert response.status_code == 422
