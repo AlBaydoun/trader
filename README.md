@@ -28,6 +28,8 @@ This project is **not** a profit guarantee and does not ship with live trading e
 - Searchable left market drawer for adding, removing, and drag-ordering charts with local
   persistence.
 - Chart zoom controls and candle inspection with exact start/end time, OHLC, and volume.
+- Resizable chart tiles with mouse, touch, and keyboard controls; each chart height is saved
+  locally per device.
 - Per-chart advanced indicator stack with RSI(1) 85/15 zones, MACD(5,6,1), EMA 12/36, ATR(15),
   and 24-candle structure context.
 - Visible active strategy definition, factor weights, entry threshold, stop model, and target model.

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChartPanel } from "./components/ChartPanel";
+import {
+  CHART_HEIGHT_MAX,
+  CHART_HEIGHT_MIN,
+  ChartPanel
+} from "./components/ChartPanel";
 import { ExtremeAlertsPanel } from "./components/ExtremeAlertsPanel";
 import { PaperTradingPanel } from "./components/PaperTradingPanel";
 import { SignalRail } from "./components/SignalRail";
@@ -51,6 +55,7 @@ export function App() {
   const [switchingAccount, setSwitchingAccount] = useState(false);
   const [mt5Quotes, setMT5Quotes] = useState<MT5Quote[]>([]);
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>(loadSelectedSymbols);
+  const [chartHeights, setChartHeights] = useState<Record<string, number>>(loadChartHeights);
   const [timeframe, setTimeframe] = useState("1m");
   const [candles, setCandles] = useState<Record<string, Candle[]>>({});
   const [signals, setSignals] = useState<Record<string, Signal>>({});
@@ -105,6 +110,10 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem("trader:selected-symbols", JSON.stringify(selectedSymbols));
   }, [selectedSymbols]);
+
+  useEffect(() => {
+    window.localStorage.setItem("trader:chart-heights", JSON.stringify(chartHeights));
+  }, [chartHeights]);
 
   useEffect(() => {
     getStrategy().then(setStrategy).catch(() => setStrategy(undefined));
@@ -349,6 +358,13 @@ export function App() {
     });
   }
 
+  function resizeChart(symbol: string, height: number) {
+    setChartHeights((current) => ({
+      ...current,
+      [symbol]: Math.max(CHART_HEIGHT_MIN, Math.min(CHART_HEIGHT_MAX, Math.round(height)))
+    }));
+  }
+
   function openExtremePanel() {
     const panel = document.getElementById("extreme-alerts");
     const header = document.querySelector<HTMLElement>(".workspace-header");
@@ -407,6 +423,8 @@ export function App() {
               signal={signals[symbol]}
               focused={activeSymbol === symbol}
               onFocus={setActiveSymbol}
+              height={chartHeights[symbol]}
+              onResize={resizeChart}
             />
           ))}
         </section>
@@ -461,5 +479,22 @@ function loadSelectedSymbols(): string[] {
     return symbols.length ? symbols : FALLBACK_SYMBOLS.slice(0, 4);
   } catch {
     return FALLBACK_SYMBOLS.slice(0, 4);
+  }
+}
+
+function loadChartHeights(): Record<string, number> {
+  try {
+    const stored = window.localStorage.getItem("trader:chart-heights");
+    if (!stored) return {};
+    const parsed: unknown = JSON.parse(stored);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).flatMap(([symbol, value]) => {
+        if (typeof value !== "number" || !Number.isFinite(value)) return [];
+        return [[symbol, Math.max(CHART_HEIGHT_MIN, Math.min(CHART_HEIGHT_MAX, Math.round(value)))]];
+      })
+    );
+  } catch {
+    return {};
   }
 }

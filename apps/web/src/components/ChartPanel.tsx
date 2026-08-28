@@ -1,5 +1,5 @@
-import { ExternalLink, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ExternalLink, GripHorizontal, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import type { Candle, Signal } from "../types";
 import { IndicatorStack } from "./IndicatorStack";
 
@@ -10,6 +10,8 @@ interface ChartPanelProps {
   signal?: Signal;
   focused: boolean;
   onFocus: (symbol: string) => void;
+  height?: number;
+  onResize: (symbol: string, height: number) => void;
 }
 
 interface HoveredCandle {
@@ -21,11 +23,25 @@ interface HoveredCandle {
 const MIN_VISIBLE_CANDLES = 30;
 const DEFAULT_VISIBLE_CANDLES = 120;
 const ZOOM_STEP = 30;
+export const CHART_HEIGHT_MIN = 560;
+export const CHART_HEIGHT_MAX = 960;
+const CHART_HEIGHT_DEFAULT = 560;
 
-export function ChartPanel({ symbol, timeframe, candles, signal, focused, onFocus }: ChartPanelProps) {
+export function ChartPanel({
+  symbol,
+  timeframe,
+  candles,
+  signal,
+  focused,
+  onFocus,
+  height,
+  onResize
+}: ChartPanelProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const resizeRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const [visibleCount, setVisibleCount] = useState(DEFAULT_VISIBLE_CANDLES);
   const [hovered, setHovered] = useState<HoveredCandle | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
   const visibleCandles = useMemo(
     () => candles.slice(-Math.min(visibleCount, candles.length)),
     [candles, visibleCount]
@@ -66,6 +82,55 @@ export function ChartPanel({ symbol, timeframe, candles, signal, focused, onFocu
 
   function resetZoom() {
     setVisibleCount(Math.min(DEFAULT_VISIBLE_CANDLES, candles.length || DEFAULT_VISIBLE_CANDLES));
+  }
+
+  function currentHeight() {
+    return height ?? CHART_HEIGHT_DEFAULT;
+  }
+
+  function setChartHeight(nextHeight: number) {
+    onResize(symbol, Math.max(CHART_HEIGHT_MIN, Math.min(CHART_HEIGHT_MAX, nextHeight)));
+  }
+
+  function startResize(event: PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizeRef.current = { startY: event.clientY, startHeight: currentHeight() };
+    setIsResizing(true);
+  }
+
+  function moveResize(event: PointerEvent<HTMLButtonElement>) {
+    const resize = resizeRef.current;
+    if (!resize) return;
+    setChartHeight(resize.startHeight + event.clientY - resize.startY);
+  }
+
+  function finishResize(event: PointerEvent<HTMLButtonElement>) {
+    if (!resizeRef.current) return;
+    event.stopPropagation();
+    resizeRef.current = null;
+    setIsResizing(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function handleResizeKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    const current = currentHeight();
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      setChartHeight(current + 20);
+    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      setChartHeight(current - 20);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setChartHeight(CHART_HEIGHT_MIN);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setChartHeight(CHART_HEIGHT_MAX);
+    }
   }
 
   function inspectCandle(clientX: number, clientY: number) {
@@ -135,7 +200,11 @@ export function ChartPanel({ symbol, timeframe, candles, signal, focused, onFocu
     : undefined;
 
   return (
-    <section className={`chart-panel ${focused ? "is-focused" : ""}`} onClick={() => onFocus(symbol)}>
+    <section
+      className={`chart-panel ${focused ? "is-focused" : ""} ${isResizing ? "is-resizing" : ""}`}
+      style={height ? { height: `${height}px` } : undefined}
+      onClick={() => onFocus(symbol)}
+    >
       <header className="panel-title">
         <div>
           <strong>{symbol}</strong>
@@ -190,6 +259,29 @@ export function ChartPanel({ symbol, timeframe, candles, signal, focused, onFocu
         <span>{signal ? `${Math.round(signal.confidence * 100)}% confidence` : "waiting"}</span>
       </footer>
       <IndicatorStack candles={candles} signal={signal} />
+      <button
+        className={`chart-resize-handle ${isResizing ? "active" : ""}`}
+        type="button"
+        role="separator"
+        aria-label={`Resize ${symbol} chart`}
+        aria-orientation="horizontal"
+        aria-valuemin={CHART_HEIGHT_MIN}
+        aria-valuemax={CHART_HEIGHT_MAX}
+        aria-valuenow={currentHeight()}
+        title="Drag to resize chart"
+        onPointerDown={startResize}
+        onPointerMove={moveResize}
+        onPointerUp={finishResize}
+        onPointerCancel={finishResize}
+        onLostPointerCapture={() => {
+          resizeRef.current = null;
+          setIsResizing(false);
+        }}
+        onKeyDown={handleResizeKeyDown}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <GripHorizontal size={15} aria-hidden="true" />
+      </button>
     </section>
   );
 }

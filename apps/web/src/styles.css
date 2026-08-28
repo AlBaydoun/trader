@@ -241,7 +241,7 @@ button:disabled {
 .charts-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(320px, 1fr));
-  grid-auto-rows: minmax(300px, 1fr);
+  grid-auto-rows: minmax(300px, auto);
   gap: 10px;
   min-width: 0;
 }
@@ -262,9 +262,10 @@ button:disabled {
 }
 
 .chart-panel {
-  min-height: 300px;
+  min-height: 560px;
   display: grid;
-  grid-template-rows: 44px minmax(220px, 1fr) 34px auto;
+  grid-template-rows: 44px minmax(220px, 1fr) 34px auto 16px;
+  align-self: start;
   border-radius: 7px;
   overflow: hidden;
   transition:
@@ -295,6 +296,34 @@ button:disabled {
 
 .chart-panel:hover {
   transform: translateY(-1px);
+}
+
+.chart-panel.is-resizing {
+  border-color: #e7c766;
+  transition: none;
+}
+
+.chart-resize-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 16px;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid #26313a;
+  background: #10171c;
+  color: #697785;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.chart-resize-handle:hover,
+.chart-resize-handle:focus-visible,
+.chart-resize-handle.active {
+  background: #1d282f;
+  color: #e7c766;
+  outline: none;
 }
 
 .panel-title,
