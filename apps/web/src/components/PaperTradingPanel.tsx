@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Activity,
+  BrainCircuit,
   CircleStop,
+  Database,
   FlaskConical,
   Play,
   RefreshCcw,
@@ -10,7 +12,7 @@ import {
 } from "lucide-react";
 import type { PaperControl, PaperEquityPoint, PaperPortfolio, PaperTrade } from "../types";
 
-type PaperTab = "open" | "history" | "log";
+type PaperTab = "open" | "history" | "learning" | "log";
 
 interface PaperTradingPanelProps {
   portfolio?: PaperPortfolio;
@@ -80,6 +82,15 @@ export function PaperTradingPanel({
           {error || engine?.last_error || cycleSummary(portfolio)}
         </span>
         <b>Virtual only</b>
+        {portfolio?.persistence && (
+          <b
+            className={`paper-save-state ${portfolio.persistence.status}`}
+            title="Virtual trades and learning records are stored on the API server."
+          >
+            <Database size={12} />
+            {portfolio.persistence.status === "saved" ? "Saved" : portfolio.persistence.status}
+          </b>
+        )}
       </div>
 
       {metrics && engine ? (
@@ -123,6 +134,7 @@ export function PaperTradingPanel({
                 <div><dt>Position limit</dt><dd>{engine.max_open_positions}</dd></div>
                 <div><dt>Cycle</dt><dd>{engine.timeframe} / {engine.cycle_interval_seconds}s</dd></div>
                 <div><dt>Costs</dt><dd>{money(metrics.fees_paid)} recorded</dd></div>
+                <div><dt>Paper learning</dt><dd>{portfolio.learning.observations} outcomes</dd></div>
               </dl>
             </div>
           </div>
@@ -176,6 +188,9 @@ export function PaperTradingPanel({
               <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>
                 History <span>{metrics.closed_trades}</span>
               </button>
+              <button className={tab === "learning" ? "active" : ""} onClick={() => setTab("learning")}>
+                Learning <span>{portfolio.learning.observations}</span>
+              </button>
               <button className={tab === "log" ? "active" : ""} onClick={() => setTab("log")}>
                 Decision log <span>{portfolio.decisions.length}</span>
               </button>
@@ -189,6 +204,7 @@ export function PaperTradingPanel({
             <OpenTrades trades={portfolio.open_positions} onClose={onClose} busy={busy} />
           )}
           {tab === "history" && <TradeHistory trades={portfolio.closed_trades} />}
+          {tab === "learning" && <LearningPanel learning={portfolio.learning} />}
           {tab === "log" && (
             <div className="decision-log">
               {portfolio.decisions.length ? portfolio.decisions.map((decision) => (
@@ -211,6 +227,51 @@ export function PaperTradingPanel({
         <PaperEmpty text="Connecting to the virtual portfolio." />
       )}
     </section>
+  );
+}
+
+function LearningPanel({ learning }: { learning: PaperPortfolio["learning"] }) {
+  return (
+    <div className="learning-workspace">
+      <header className="learning-header">
+        <div>
+          <strong><BrainCircuit size={15} /> {learning.mode}</strong>
+          <span>Losses are recorded as faults; only the paper-entry overlay can adapt.</span>
+        </div>
+        <span className="learning-count">{learning.observations} outcomes · {learning.wins} wins · {learning.losses} losses</span>
+      </header>
+      <div className="learning-recommendation">
+        <strong>Current recommendation</strong>
+        <p>{learning.recommendation}</p>
+      </div>
+      {learning.last_fault && (
+        <div className="learning-fault">
+          <strong>Latest fault to review</strong>
+          <span>{learning.last_fault}</span>
+        </div>
+      )}
+      {learning.factor_performance.length ? (
+        <div className="learning-factor-table">
+          {learning.factor_performance.map((factor) => (
+            <div className="learning-factor-row" key={factor.factor}>
+              <strong>{factor.factor}</strong>
+              <span>{factor.samples} samples</span>
+              <span>{factor.wins}W / {factor.losses}L</span>
+              <b className={factor.win_rate >= 60 ? "positive" : factor.win_rate < 45 ? "negative" : "neutral"}>
+                {factor.win_rate.toFixed(1)}%
+              </b>
+              <span>{factor.average_r_multiple.toFixed(2)}R avg</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <PaperEmpty text="Completed virtual trades will teach the paper overlay which factors deserve more or less weight." />
+      )}
+      <footer className="learning-footnote">
+        <ShieldCheck size={13} />
+        <span>Learning stays inside paper trading. It never changes the deterministic live strategy or unlocks MT5 orders.</span>
+      </footer>
+    </div>
   );
 }
 

@@ -9,7 +9,9 @@ Trader is designed as an operator-controlled workstation. It supports market sca
 - **Web workstation**: React/Vite UI for Windows, Android, and large multi-monitor setups. Charts render with canvas so panels can resize and pop out into separate browser windows.
 - **API service**: FastAPI application exposing status, candles, scans, signals, backtests, positions, order placement, and metrics.
 - **Scanner worker**: Continuous loop that scans configured symbols and can later publish to Redis, websockets, email, mobile push, or voice channels.
-- **Strategy layer**: Deterministic signal engine combining trend, momentum, structure, volatility, and explicit reason objects.
+- **Strategy layer**: Deterministic signal engine combining EMA trend, momentum, MACD, RSI(1),
+  structure, ATR volatility, and explicit reason objects. The web chart renders the same indicator
+  context beneath each chart.
 - **News analysis layer**: Converts verified economic-calendar inputs into global and per-symbol
   scenarios, transmission chains, timing windows, confidence, and invalidation conditions. Missing
   headline coverage is exposed rather than silently replaced with generated content.
@@ -21,7 +23,8 @@ Trader is designed as an operator-controlled workstation. It supports market sca
   the 85/15 zones, and retains alert history without creating orders.
 - **Paper trading service**: Persists a virtual ledger, processes market cycles, applies simulated
   slippage and commission, closes positions on stop, target, reversal, time limit, or operator
-  action, and exposes detailed equity and decision history.
+  action, exposes detailed equity and decision history, and records a conservative paper-only
+  factor reliability overlay from closed outcomes. Saves are atomic and keep a recovery copy.
 - **Risk engine**: Server-side order gate enforcing stop losses, max risk per trade, max daily loss, max open positions, and symbol exposure.
 - **Broker adapters**: Paper broker is enabled by default. MT5/JustMarkets is represented as an adapter boundary and remains locked until explicit live settings are supplied.
 - **Observability**: Prometheus metrics plus Docker Compose hooks for Grafana.

@@ -12,7 +12,8 @@ This project is **not** a profit guarantee and does not ship with live trading e
 - Explainable signal engine with trend, momentum, volatility, risk, and event/news rationale.
 - Paper broker as the default execution engine.
 - Persistent virtual trading ledger that opens, marks, closes, and reports every eligible paper
-  position with entry, exit, fees, risk, R-multiple, MFE/MAE, equity, and decision history.
+  position with entry, exit, fees, risk, R-multiple, MFE/MAE, equity, decision history, and
+  paper-only learning from closed-trade outcomes.
 - MT5/JustMarkets integration boundary with a disabled-by-default adapter contract.
 - Persistent multi-account profiles with masked logins and an in-workstation account selector.
 - Windows MT5 read-only bridge for verified account metrics, broker quotes, and open positions.
@@ -27,6 +28,8 @@ This project is **not** a profit guarantee and does not ship with live trading e
 - Searchable left market drawer for adding, removing, and drag-ordering charts with local
   persistence.
 - Chart zoom controls and candle inspection with exact start/end time, OHLC, and volume.
+- Per-chart advanced indicator stack with RSI(1) 85/15 zones, MACD(5,6,1), EMA 12/36, ATR(15),
+  and 24-candle structure context.
 - Visible active strategy definition, factor weights, entry threshold, stop model, and target model.
 - Backtesting service for strategy validation before deployment.
 - Continuous scanner service shape for background monitoring.

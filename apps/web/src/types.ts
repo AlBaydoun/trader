@@ -270,6 +270,9 @@ export interface PaperTrade {
   exit_reason: "stop_loss" | "take_profit" | "signal_reversal" | "time_limit" | "operator" | null;
   max_favorable_excursion: number;
   max_adverse_excursion: number;
+  factor_categories: string[];
+  learning_adjustment: number;
+  learned_score: number;
 }
 
 export interface PaperDecision {
@@ -290,6 +293,35 @@ export interface PaperEquityPoint {
   equity: number;
   balance: number;
   unrealized_pnl: number;
+}
+
+export interface PaperFactorPerformance {
+  factor: string;
+  samples: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  average_r_multiple: number;
+}
+
+export interface PaperLearningProfile {
+  enabled: boolean;
+  mode: string;
+  observations: number;
+  wins: number;
+  losses: number;
+  last_updated_at: string | null;
+  last_fault: string;
+  recommendation: string;
+  factor_performance: PaperFactorPerformance[];
+}
+
+export interface PaperPersistenceStatus {
+  storage: string;
+  state_version: number;
+  status: string;
+  last_saved_at: string | null;
+  backup_available: boolean;
 }
 
 export interface PaperEngineStatus {
@@ -341,6 +373,8 @@ export interface PaperPortfolio {
   closed_trades: PaperTrade[];
   decisions: PaperDecision[];
   equity_curve: PaperEquityPoint[];
+  learning: PaperLearningProfile;
+  persistence: PaperPersistenceStatus;
   disclaimer: string;
 }
 

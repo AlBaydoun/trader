@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     paper_slippage_bps: float = Field(default=1.0, ge=0.0, le=100.0)
     paper_cycle_interval_seconds: int = Field(default=60, ge=15, le=3600)
     paper_max_position_minutes: int = Field(default=240, ge=1, le=43200)
+    paper_adaptive_learning_enabled: bool = True
+    paper_learning_min_samples: int = Field(default=8, ge=3, le=1000)
 
     extreme_scan_enabled: bool = True
     extreme_scan_cache_seconds: int = Field(default=10, ge=5, le=300)

@@ -103,6 +103,8 @@ paper_trader = PaperTradingService(
     slippage_bps=settings.paper_slippage_bps,
     cycle_interval_seconds=settings.paper_cycle_interval_seconds,
     max_position_minutes=settings.paper_max_position_minutes,
+    adaptive_learning_enabled=settings.paper_adaptive_learning_enabled,
+    learning_min_samples=settings.paper_learning_min_samples,
 )
 paper_cycle_lock = Lock()
 

@@ -1,6 +1,7 @@
 import { ExternalLink, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Candle, Signal } from "../types";
+import { IndicatorStack } from "./IndicatorStack";
 
 interface ChartPanelProps {
   symbol: string;
@@ -188,6 +189,7 @@ export function ChartPanel({ symbol, timeframe, candles, signal, focused, onFocu
         <span>{visibleCandles.length} candles visible</span>
         <span>{signal ? `${Math.round(signal.confidence * 100)}% confidence` : "waiting"}</span>
       </footer>
+      <IndicatorStack candles={candles} signal={signal} />
     </section>
   );
 }

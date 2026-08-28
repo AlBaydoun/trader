@@ -264,7 +264,7 @@ button:disabled {
 .chart-panel {
   min-height: 300px;
   display: grid;
-  grid-template-rows: 44px minmax(0, 1fr) 34px;
+  grid-template-rows: 44px minmax(220px, 1fr) 34px auto;
   border-radius: 7px;
   overflow: hidden;
   transition:
@@ -358,6 +358,177 @@ button:disabled {
   min-height: 0;
   overflow: hidden;
   touch-action: pan-y;
+}
+
+.indicator-stack {
+  border-top: 1px solid #26313a;
+  background: #151c21;
+}
+
+.indicator-stack summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px;
+  color: #afbac3;
+  cursor: pointer;
+  list-style: none;
+}
+
+.indicator-stack summary::-webkit-details-marker {
+  display: none;
+}
+
+.indicator-stack-title,
+.indicator-reading-name,
+.indicator-reading-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.indicator-stack-title svg {
+  color: #e7c766;
+}
+
+.indicator-stack-title strong {
+  color: #dce5eb;
+  font-size: 11px;
+}
+
+.indicator-stack-summary {
+  overflow: hidden;
+  color: #7f8e9b;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.indicator-readings {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  padding: 0 1px 1px;
+  background: #26313a;
+  overflow: hidden;
+}
+
+.indicator-reading {
+  min-width: 0;
+  padding: 9px;
+  background: #12181d;
+}
+
+.indicator-reading-heading,
+.indicator-reading-result {
+  justify-content: space-between;
+  gap: 7px;
+}
+
+.indicator-reading-heading {
+  display: flex;
+  color: #7f8e9b;
+  font-size: 9px;
+}
+
+.indicator-reading-name svg {
+  color: #91a0ac;
+}
+
+.indicator-reading-name strong {
+  color: #dce5eb;
+  font-size: 10px;
+}
+
+.indicator-reading-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  margin-top: 7px;
+}
+
+.indicator-reading-result strong {
+  font-size: 13px;
+}
+
+.indicator-reading-result span {
+  max-width: 100%;
+  overflow: visible;
+  color: #8a98a6;
+  font-size: 9px;
+  line-height: 1.25;
+  text-align: left;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.indicator-reading-result .positive {
+  color: #62e0b8;
+}
+
+.indicator-reading-result .negative {
+  color: #ff8ea0;
+}
+
+.indicator-reading-result .warning {
+  color: #f4d57a;
+}
+
+.indicator-reading p {
+  min-height: 27px;
+  margin: 6px 0 0;
+  color: #7f8e9b;
+  font-size: 9px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.indicator-gauge {
+  position: relative;
+  height: 4px;
+  margin-top: 9px;
+  border-radius: 2px;
+  background: #273138;
+}
+
+.indicator-gauge i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #e7c766;
+}
+
+.gauge-line {
+  position: absolute;
+  top: -2px;
+  width: 1px;
+  height: 8px;
+  background: #8a98a6;
+}
+
+.gauge-line.upper {
+  left: 85%;
+}
+
+.gauge-line.lower {
+  left: 15%;
+}
+
+.indicator-disclaimer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 10px 8px;
+  color: #697785;
+  font-size: 9px;
+}
+
+.indicator-disclaimer svg {
+  flex: 0 0 auto;
+  color: #e7c766;
 }
 
 .candle-tooltip {
@@ -1396,6 +1567,9 @@ button:disabled {
 }
 
 .paper-status b {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-left: auto;
   padding: 3px 6px;
   border-radius: 4px;
@@ -1404,6 +1578,22 @@ button:disabled {
   font-size: 9px;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+.paper-status .paper-save-state {
+  margin-left: 0;
+  color: #62e0b8;
+  background: rgba(46, 216, 163, 0.12);
+}
+
+.paper-status .paper-save-state.recovered {
+  color: #f4d57a;
+  background: rgba(231, 199, 102, 0.12);
+}
+
+.paper-status .paper-save-state.error {
+  color: #ff8ea0;
+  background: rgba(255, 100, 124, 0.14);
 }
 
 .paper-metrics {
@@ -1665,6 +1855,120 @@ button:disabled {
 
 .paper-table tbody tr:hover {
   background: #151d22;
+}
+
+.learning-workspace {
+  min-height: 180px;
+  border-bottom: 1px solid #26313a;
+}
+
+.learning-header,
+.learning-recommendation,
+.learning-fault,
+.learning-factor-row,
+.learning-footnote {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.learning-header {
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #26313a;
+}
+
+.learning-header strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #dce5eb;
+  font-size: 11px;
+}
+
+.learning-header strong svg {
+  color: #e7c766;
+}
+
+.learning-header span,
+.learning-count,
+.learning-recommendation p,
+.learning-fault span,
+.learning-factor-row span,
+.learning-footnote {
+  color: #7f8e9b;
+  font-size: 10px;
+}
+
+.learning-header > div > span {
+  display: block;
+  margin-top: 3px;
+}
+
+.learning-count {
+  white-space: nowrap;
+}
+
+.learning-recommendation,
+.learning-fault {
+  align-items: flex-start;
+  padding: 10px 16px;
+  border-bottom: 1px solid #202930;
+}
+
+.learning-recommendation strong,
+.learning-fault strong {
+  flex: 0 0 145px;
+  color: #afbac3;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.learning-recommendation p,
+.learning-fault span {
+  margin: 0;
+  color: #cbd5dc;
+  line-height: 1.4;
+}
+
+.learning-fault strong {
+  color: #ff8ea0;
+}
+
+.learning-factor-table {
+  overflow-x: auto;
+}
+
+.learning-factor-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 100px 90px 70px 90px;
+  min-width: 600px;
+  padding: 9px 16px;
+  border-bottom: 1px solid #202930;
+}
+
+.learning-factor-row strong {
+  color: #dce5eb;
+  font-size: 10px;
+}
+
+.learning-factor-row b {
+  font-size: 10px;
+}
+
+.learning-factor-row .neutral {
+  color: #f4d57a;
+}
+
+.learning-footnote {
+  align-items: flex-start;
+  padding: 10px 16px;
+  line-height: 1.45;
+}
+
+.learning-footnote svg {
+  flex: 0 0 auto;
+  color: #e7c766;
 }
 
 .paper-table td > strong,
@@ -2238,7 +2542,11 @@ button:disabled {
   .charts-grid,
   .charts-grid.two {
     grid-template-columns: 1fr;
-    grid-auto-rows: minmax(280px, 54vh);
+    grid-auto-rows: auto;
+  }
+
+  .chart-panel {
+    min-height: 560px;
   }
 
   .workstation {
@@ -2247,6 +2555,15 @@ button:disabled {
 
   .signal-rail {
     grid-template-columns: 1fr;
+  }
+
+  .indicator-readings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: visible;
+  }
+
+  .indicator-reading {
+    min-width: 0;
   }
 
   .paper-workspace {

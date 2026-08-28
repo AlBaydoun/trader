@@ -1,5 +1,8 @@
 import json
-from dataclasses import asdict, dataclass
+import os
+import shutil
+from contextlib import suppress
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import RLock
@@ -53,6 +56,9 @@ class PaperTrade:
     exit_reason: PaperExitReason | None = None
     max_favorable_excursion: float = 0.0
     max_adverse_excursion: float = 0.0
+    factor_categories: list[str] = field(default_factory=list)
+    learning_adjustment: float = 0.0
+    learned_score: float = 0.0
 
 
 @dataclass
@@ -75,6 +81,38 @@ class PaperEquityPoint:
     equity: float
     balance: float
     unrealized_pnl: float
+
+
+@dataclass
+class PaperFactorPerformance:
+    factor: str
+    samples: int
+    wins: int
+    losses: int
+    win_rate: float
+    average_r_multiple: float
+
+
+@dataclass
+class PaperLearningProfile:
+    enabled: bool
+    mode: str
+    observations: int
+    wins: int
+    losses: int
+    last_updated_at: datetime | None
+    last_fault: str
+    recommendation: str
+    factor_performance: list[PaperFactorPerformance]
+
+
+@dataclass
+class PaperPersistenceStatus:
+    storage: str
+    state_version: int
+    status: str
+    last_saved_at: datetime | None
+    backup_available: bool
 
 
 @dataclass
@@ -129,6 +167,8 @@ class PaperPortfolio:
     closed_trades: list[PaperTrade]
     decisions: list[PaperDecision]
     equity_curve: list[PaperEquityPoint]
+    learning: PaperLearningProfile
+    persistence: PaperPersistenceStatus
     disclaimer: str
 
 
@@ -148,8 +188,11 @@ class PaperTradingService:
         slippage_bps: float,
         cycle_interval_seconds: int,
         max_position_minutes: int,
+        adaptive_learning_enabled: bool = True,
+        learning_min_samples: int = 8,
     ) -> None:
-        self.state_file = Path(state_file)
+        self.state_file = self._resolve_state_file(state_file)
+        self.backup_file = self.state_file.with_suffix(f"{self.state_file.suffix}.bak")
         self.starting_balance = starting_balance
         self.enabled = enabled
         self.risk_per_trade_pct = risk_per_trade_pct
@@ -159,6 +202,8 @@ class PaperTradingService:
         self.slippage_bps = slippage_bps
         self.cycle_interval_seconds = cycle_interval_seconds
         self.max_position_minutes = max_position_minutes
+        self.adaptive_learning_enabled = adaptive_learning_enabled
+        self.learning_min_samples = learning_min_samples
         self.timeframe = "1m"
         self.trades: list[PaperTrade] = []
         self.decisions: list[PaperDecision] = []
@@ -173,6 +218,14 @@ class PaperTradingService:
         self.eligible_candidates = 0
         self.opened_last_cycle = 0
         self.closed_last_cycle = 0
+        self.learning_observations = 0
+        self.learning_wins = 0
+        self.learning_losses = 0
+        self.learning_last_updated_at: datetime | None = None
+        self.learning_last_fault = ""
+        self.learning_stats: dict[str, dict[str, float]] = {}
+        self.persistence_status = "new"
+        self.last_saved_at: datetime | None = None
         self._lock = RLock()
         self._load()
 
@@ -276,23 +329,38 @@ class PaperTradingService:
                     self._close_trade(trade, exit_price, exit_reason, cycle_time, cycle_id)
                     closed_symbols.add(trade.symbol)
 
-            actionable = [
-                item
-                for item in scan.opportunities
-                if item.market_active
-                and item.direction != Direction.hold
-                and item.opportunity_score >= self.minimum_opportunity_score
-            ]
+            actionable: list[tuple[MarketOpportunity, float]] = []
+            learning_blocked = 0
+            for item in scan.opportunities:
+                if not item.market_active or item.direction == Direction.hold:
+                    continue
+                learning_adjustment = self._learning_adjustment(item)
+                learned_score = max(0.0, min(100.0, item.opportunity_score + learning_adjustment))
+                if item.opportunity_score < self.minimum_opportunity_score:
+                    continue
+                if (
+                    self.adaptive_learning_enabled
+                    and self.learning_observations >= self.learning_min_samples
+                    and learned_score < max(35.0, self.minimum_opportunity_score)
+                ):
+                    learning_blocked += 1
+                    continue
+                actionable.append((item, learning_adjustment))
             self.eligible_candidates = len(actionable)
             open_symbols = {trade.symbol for trade in self._open_trades()}
             blocked_by_limit = 0
-            for opportunity in actionable:
+            for opportunity, learning_adjustment in actionable:
                 if opportunity.symbol in open_symbols or opportunity.symbol in closed_symbols:
                     continue
                 if len(open_symbols) >= self.max_open_positions:
                     blocked_by_limit += 1
                     continue
-                new_trade = self._open_opportunity(opportunity, source_account_id, cycle_time)
+                new_trade = self._open_opportunity(
+                    opportunity,
+                    source_account_id,
+                    cycle_time,
+                    learning_adjustment,
+                )
                 if new_trade is None:
                     continue
                 open_symbols.add(new_trade.symbol)
@@ -322,7 +390,7 @@ class PaperTradingService:
                     f"Scanned {scan.scanned_symbols} instruments; found {len(actionable)} "
                     f"actionable signals; opened {self.opened_last_cycle}; closed "
                     f"{self.closed_last_cycle}; {blocked_by_limit} blocked by the virtual "
-                    "position limit."
+                    f"position limit; {learning_blocked} filtered by the paper learning overlay."
                 ),
             )
             self._append_equity_point(cycle_time)
@@ -404,6 +472,12 @@ class PaperTradingService:
             self.eligible_candidates = 0
             self.opened_last_cycle = 0
             self.closed_last_cycle = 0
+            self.learning_observations = 0
+            self.learning_wins = 0
+            self.learning_losses = 0
+            self.learning_last_updated_at = None
+            self.learning_last_fault = ""
+            self.learning_stats = {}
             self._decision(
                 cycle_id="control",
                 action="control",
@@ -447,6 +521,14 @@ class PaperTradingService:
                 opened_last_cycle=self.opened_last_cycle,
                 closed_last_cycle=self.closed_last_cycle,
             )
+            learning = self._learning_profile()
+            persistence = PaperPersistenceStatus(
+                storage="Local server ledger",
+                state_version=2,
+                status=self.persistence_status,
+                last_saved_at=self.last_saved_at,
+                backup_available=self.backup_file.is_file(),
+            )
             return PaperPortfolio(
                 engine=engine,
                 metrics=metrics,
@@ -454,6 +536,8 @@ class PaperTradingService:
                 closed_trades=closed_trades[:500],
                 decisions=list(reversed(self.decisions[-500:])),
                 equity_curve=self.equity_curve[-1000:],
+                learning=learning,
+                persistence=persistence,
                 disclaimer=(
                     "Virtual results use observed prices plus configured simulation costs. They "
                     "do not place MT5 orders, use real money, or predict future live performance."
@@ -465,6 +549,7 @@ class PaperTradingService:
         opportunity: MarketOpportunity,
         source_account_id: str,
         now: datetime,
+        learning_adjustment: float = 0.0,
     ) -> PaperTrade | None:
         if opportunity.stop_loss is None or opportunity.take_profit is None:
             return None
@@ -507,6 +592,13 @@ class PaperTradingService:
             source_account_id=source_account_id,
             opened_at=now,
             updated_at=now,
+            factor_categories=[
+                reason.category for reason in opportunity.reasons if reason.category != "risk"
+            ],
+            learning_adjustment=round(learning_adjustment, 2),
+            learned_score=round(
+                max(0.0, min(100.0, opportunity.opportunity_score + learning_adjustment)), 1
+            ),
         )
         self.trades.append(trade)
         return trade
@@ -571,13 +663,15 @@ class PaperTradingService:
         trade.return_pct = round(trade.net_pnl / notional * 100, 3) if notional else 0.0
         trade.r_multiple = round(trade.net_pnl / trade.risk_amount, 3) if trade.risk_amount else 0.0
         self.closed_last_cycle += 1
+        learning_note = self._record_learning_outcome(trade)
         self._decision(
             cycle_id=cycle_id,
             action="closed",
             outcome="profit" if trade.net_pnl > 0 else "loss",
             reason=(
                 f"Closed by {exit_reason.replace('_', ' ')} at {exit_price:.8g}. "
-                f"Net virtual result {trade.net_pnl:.2f} ({trade.r_multiple:.2f}R)."
+                f"Net virtual result {trade.net_pnl:.2f} ({trade.r_multiple:.2f}R). "
+                f"{learning_note}"
             ),
             symbol=trade.symbol,
             trade=trade,
@@ -698,20 +792,135 @@ class PaperTradingService:
     def _closed_trades(self) -> list[PaperTrade]:
         return [trade for trade in self.trades if trade.status == "closed"]
 
+    def _learning_adjustment(self, opportunity: MarketOpportunity) -> float:
+        if not self.adaptive_learning_enabled:
+            return 0.0
+        adjustments: list[float] = []
+        for reason in opportunity.reasons:
+            stats = self.learning_stats.get(reason.category)
+            samples = int(stats.get("samples", 0)) if stats else 0
+            if not stats or samples < self.learning_min_samples:
+                continue
+            wins = stats.get("wins", 0.0)
+            reliability = (wins + 1.0) / (samples + 2.0)
+            direction = (
+                1.0
+                if reason.impact == "bullish"
+                else -1.0
+                if reason.impact == "bearish"
+                else 0.0
+            )
+            adjustments.append((reliability - 0.5) * 10.0 * direction)
+        if not adjustments:
+            return 0.0
+        return round(max(-10.0, min(10.0, sum(adjustments) / len(adjustments))), 2)
+
+    def _record_learning_outcome(self, trade: PaperTrade) -> str:
+        self.learning_observations += 1
+        if trade.net_pnl > 0:
+            self.learning_wins += 1
+        else:
+            self.learning_losses += 1
+        self.learning_last_updated_at = datetime.now(UTC)
+        factors = trade.factor_categories or ["manual"]
+        for factor in factors:
+            stats = self.learning_stats.setdefault(
+                factor,
+                {"samples": 0.0, "wins": 0.0, "losses": 0.0, "r_total": 0.0},
+            )
+            stats["samples"] += 1
+            stats["r_total"] += trade.r_multiple
+            if trade.net_pnl > 0:
+                stats["wins"] += 1
+            else:
+                stats["losses"] += 1
+        if trade.net_pnl <= 0:
+            self.learning_last_fault = (
+                f"{trade.symbol} {trade.direction.value} finished at {trade.r_multiple:.2f}R "
+                f"via {trade.exit_reason or 'unknown'}; review {', '.join(factors)}."
+            )
+        if not self.adaptive_learning_enabled:
+            return "Learning is recorded for review; the overlay is disabled."
+        if self.learning_observations < self.learning_min_samples:
+            return (
+                f"Learning sample {self.learning_observations}/{self.learning_min_samples} "
+                "recorded; no adjustment applied yet."
+            )
+        return "Paper learning updated the factor reliability overlay for future entries."
+
+    def _learning_profile(self) -> PaperLearningProfile:
+        factors: list[PaperFactorPerformance] = []
+        for factor, stats in sorted(
+            self.learning_stats.items(),
+            key=lambda item: (-int(item[1].get("samples", 0)), item[0]),
+        ):
+            samples = int(stats.get("samples", 0))
+            wins = int(stats.get("wins", 0))
+            losses = int(stats.get("losses", 0))
+            factors.append(
+                PaperFactorPerformance(
+                    factor=factor,
+                    samples=samples,
+                    wins=wins,
+                    losses=losses,
+                    win_rate=round(wins / samples * 100, 1) if samples else 0.0,
+                    average_r_multiple=round(stats.get("r_total", 0.0) / samples, 3)
+                    if samples
+                    else 0.0,
+                )
+            )
+        if self.learning_observations < self.learning_min_samples:
+            recommendation = (
+                f"Collecting outcomes ({self.learning_observations}/{self.learning_min_samples}); "
+                "the paper strategy is unchanged until the sample is meaningful."
+            )
+        else:
+            weak = [
+                item.factor
+                for item in factors
+                if item.samples >= self.learning_min_samples and item.win_rate < 45
+            ]
+            strong = [
+                item.factor
+                for item in factors
+                if item.samples >= self.learning_min_samples and item.win_rate >= 60
+            ]
+            if weak:
+                recommendation = (
+                    "Down-weighting weak factors in paper entries: "
+                    f"{', '.join(weak[:3])}."
+                )
+            elif strong:
+                recommendation = f"Paper evidence supports these factors: {', '.join(strong[:3])}."
+            else:
+                recommendation = "Paper evidence is mixed; keeping the base strategy weights."
+        return PaperLearningProfile(
+            enabled=self.adaptive_learning_enabled,
+            mode="Paper-only adaptive overlay",
+            observations=self.learning_observations,
+            wins=self.learning_wins,
+            losses=self.learning_losses,
+            last_updated_at=self.learning_last_updated_at,
+            last_fault=self.learning_last_fault,
+            recommendation=recommendation,
+            factor_performance=factors,
+        )
+
     def _trim(self) -> None:
         open_positions = self._open_trades()
         closed_positions = sorted(
             self._closed_trades(),
             key=lambda item: item.closed_at or item.updated_at,
             reverse=True,
-        )[:2000]
+        )[:10000]
         self.trades = open_positions + closed_positions
-        self.decisions = self.decisions[-2000:]
-        self.equity_curve = self.equity_curve[-5000:]
+        self.decisions = self.decisions[-10000:]
+        self.equity_curve = self.equity_curve[-20000:]
 
     def _save(self) -> None:
+        self.last_saved_at = datetime.now(UTC)
         payload = {
-            "version": 1,
+            "version": 2,
             "starting_balance": self.starting_balance,
             "enabled": self.enabled,
             "risk_per_trade_pct": self.risk_per_trade_pct,
@@ -728,20 +937,58 @@ class PaperTradingService:
             "eligible_candidates": self.eligible_candidates,
             "opened_last_cycle": self.opened_last_cycle,
             "closed_last_cycle": self.closed_last_cycle,
+            "last_saved_at": self._datetime_text(self.last_saved_at),
+            "learning": {
+                "enabled": self.adaptive_learning_enabled,
+                "observations": self.learning_observations,
+                "wins": self.learning_wins,
+                "losses": self.learning_losses,
+                "last_updated_at": self._datetime_text(self.learning_last_updated_at),
+                "last_fault": self.learning_last_fault,
+                "factor_stats": self.learning_stats,
+            },
             "trades": [self._serialize(item) for item in self.trades],
             "decisions": [self._serialize(item) for item in self.decisions],
             "equity_curve": [self._serialize(item) for item in self.equity_curve],
         }
         self.state_file.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.state_file.with_suffix(f"{self.state_file.suffix}.tmp")
-        temporary.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        temporary.replace(self.state_file)
+        try:
+            with temporary.open("w", encoding="utf-8", newline="\n") as stream:
+                json.dump(payload, stream, indent=2)
+                stream.flush()
+                os.fsync(stream.fileno())
+            if self.state_file.is_file():
+                with suppress(OSError):
+                    shutil.copy2(self.state_file, self.backup_file)
+            temporary.replace(self.state_file)
+            self.persistence_status = "saved"
+        except OSError:
+            self.persistence_status = "error"
+            raise
 
     def _load(self) -> None:
-        if not self.state_file.is_file():
+        source_file: Path | None = None
+        has_state_file = False
+        for candidate in (self.state_file, self.backup_file):
+            if not candidate.is_file():
+                continue
+            has_state_file = True
+            try:
+                json.loads(candidate.read_text(encoding="utf-8"))
+            except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                continue
+            source_file = candidate
+            break
+        if source_file is None:
+            if has_state_file:
+                self.last_error = (
+                    "The virtual portfolio state is damaged and no recovery copy is valid."
+                )
+                self.persistence_status = "error"
             return
         try:
-            payload = json.loads(self.state_file.read_text(encoding="utf-8"))
+            payload = json.loads(source_file.read_text(encoding="utf-8"))
             self.starting_balance = float(payload.get("starting_balance", self.starting_balance))
             self.enabled = bool(payload.get("enabled", self.enabled))
             self.risk_per_trade_pct = float(
@@ -764,6 +1011,7 @@ class PaperTradingService:
             self.eligible_candidates = int(payload.get("eligible_candidates", 0))
             self.opened_last_cycle = int(payload.get("opened_last_cycle", 0))
             self.closed_last_cycle = int(payload.get("closed_last_cycle", 0))
+            self.last_saved_at = self._parse_datetime(payload.get("last_saved_at"))
             self.trades = [self._trade_from_dict(item) for item in payload.get("trades", [])]
             self.decisions = [
                 self._decision_from_dict(item) for item in payload.get("decisions", [])
@@ -771,8 +1019,52 @@ class PaperTradingService:
             self.equity_curve = [
                 self._equity_from_dict(item) for item in payload.get("equity_curve", [])
             ]
+            learning = payload.get("learning", {})
+            if isinstance(learning, dict):
+                self.learning_observations = int(learning.get("observations", 0))
+                self.learning_wins = int(learning.get("wins", 0))
+                self.learning_losses = int(learning.get("losses", 0))
+                self.learning_last_updated_at = self._parse_datetime(
+                    learning.get("last_updated_at")
+                )
+                self.learning_last_fault = str(learning.get("last_fault", ""))
+                raw_stats = learning.get("factor_stats", {})
+                if isinstance(raw_stats, dict):
+                    self.learning_stats = {
+                        str(factor): {
+                            "samples": float(stats.get("samples", 0)),
+                            "wins": float(stats.get("wins", 0)),
+                            "losses": float(stats.get("losses", 0)),
+                            "r_total": float(stats.get("r_total", 0)),
+                        }
+                        for factor, stats in raw_stats.items()
+                        if isinstance(stats, dict)
+                    }
+            if not self.learning_observations and self._closed_trades():
+                self._rebuild_learning_from_trades()
+            self.persistence_status = "recovered" if source_file == self.backup_file else "saved"
         except (OSError, TypeError, ValueError, json.JSONDecodeError):
             self.last_error = "The virtual portfolio state could not be loaded; using a new ledger."
+            self.persistence_status = "error"
+
+    def _rebuild_learning_from_trades(self) -> None:
+        self.learning_observations = 0
+        self.learning_wins = 0
+        self.learning_losses = 0
+        self.learning_stats = {}
+        for trade in sorted(
+            self._closed_trades(), key=lambda item: item.closed_at or item.updated_at
+        ):
+            self._record_learning_outcome(trade)
+
+    @staticmethod
+    def _resolve_state_file(state_file: str) -> Path:
+        configured = Path(state_file)
+        if configured.is_absolute():
+            return configured
+        # Resolve relative paths from the API service directory, not the caller's cwd.
+        api_directory = Path(__file__).resolve().parents[2]
+        return (api_directory / configured).resolve()
 
     @staticmethod
     def _serialize(item: Any) -> dict[str, Any]:

@@ -23,25 +23,27 @@ class SignalEngine:
     def definition() -> StrategyDefinition:
         return StrategyDefinition(
             name="Trend, Momentum and Structure",
-            version="1.0",
+            version="1.1",
             summary=(
-                "A deterministic multi-factor strategy that waits for trend and momentum "
-                "agreement, checks breakouts, and reduces conviction in elevated volatility."
+                "A deterministic multi-factor strategy that waits for EMA, momentum, and MACD "
+                "agreement, checks RSI(1) extremes and breakouts, and reduces conviction in "
+                "elevated volatility."
             ),
             components=[
-                "12-candle versus 36-candle trend",
-                "8-candle price momentum",
-                "24-candle support and resistance breakout",
-                "15-candle average true range risk filter",
+                "EMA 12/36 trend alignment",
+                "8-candle momentum with MACD (5, 6, 1) context",
+                "RSI (1) extreme levels at 85/15",
+                "24-candle structure with ATR (15) risk filter",
             ],
             minimum_candles=40,
             entry_threshold=0.38,
             stop_model="1.5 ATR or 0.2% of price, whichever is wider",
             target_model="2:1 target distance relative to stop distance",
-            adaptive_learning=False,
+            adaptive_learning=True,
             caveat=(
-                "The strategy is rule-based and does not retrain itself in live trading. "
-                "Changes require backtesting and operator approval."
+                "The base rules remain deterministic. Closed paper trades feed a visible, "
+                "conservative reliability overlay for future paper entries only; live trading "
+                "never retrains itself and requires operator approval."
             ),
         )
 
@@ -56,6 +58,9 @@ class SignalEngine:
         fast_ma = mean(closes[-12:])
         slow_ma = mean(closes[-36:])
         momentum = (closes[-1] - closes[-8]) / closes[-8]
+        macd = self._ema(closes, 5) - self._ema(closes, 6)
+        previous_macd = self._ema(closes[:-1], 5) - self._ema(closes[:-1], 6)
+        rsi1 = 100.0 if closes[-1] > closes[-2] else 0.0 if closes[-1] < closes[-2] else 50.0
         atr = self._average_true_range(candles[-15:])
         volatility_pct = atr / closes[-1]
 
@@ -100,6 +105,58 @@ class SignalEngine:
                     "Momentum is not strong enough for conviction.",
                     "neutral",
                     0.12,
+                )
+            )
+
+        if macd > 0:
+            score += 0.08
+            reasons.append(
+                SignalReason(
+                    "macd",
+                    "MACD is above its zero line and "
+                    f"{'rising' if macd >= previous_macd else 'fading'}.",
+                    "bullish",
+                    0.08,
+                )
+            )
+        else:
+            score -= 0.08
+            reasons.append(
+                SignalReason(
+                    "macd",
+                    "MACD is below its zero line and "
+                    f"{'rising' if macd >= previous_macd else 'fading'}.",
+                    "bearish",
+                    0.08,
+                )
+            )
+        if rsi1 >= 85:
+            score *= 0.9
+            reasons.append(
+                SignalReason(
+                    "rsi",
+                    "RSI(1) is at or above the 85 upper extreme; continuation risk is elevated.",
+                    "risk",
+                    0.1,
+                )
+            )
+        elif rsi1 <= 15:
+            score *= 0.9
+            reasons.append(
+                SignalReason(
+                    "rsi",
+                    "RSI(1) is at or below the 15 lower extreme; reversal risk is elevated.",
+                    "risk",
+                    0.1,
+                )
+            )
+        else:
+            reasons.append(
+                SignalReason(
+                    "rsi",
+                    "RSI(1) is outside the configured extreme zones.",
+                    "neutral",
+                    0.05,
                 )
             )
 
@@ -172,3 +229,13 @@ class SignalEngine:
             )
             previous_close = candle.close
         return mean(ranges) if ranges else 0.0
+
+    @staticmethod
+    def _ema(values: list[float], period: int) -> float:
+        if not values:
+            return 0.0
+        seed = mean(values[:period])
+        multiplier = 2 / (period + 1)
+        for value in values[period:]:
+            seed = (value - seed) * multiplier + seed
+        return seed

@@ -28,6 +28,8 @@ docker compose up --build -d
 ```
 
 Use paper trading first. Confirm `/status` reports `live_trading_unlocked: false` unless you intentionally enabled live mode.
+Keep `data/paper-trading.json` and its `.bak` file on persistent storage; they contain the virtual
+trade history, equity curve, decision log, and paper-learning profile.
 
 ## Production Notes
 

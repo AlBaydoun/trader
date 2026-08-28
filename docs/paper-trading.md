@@ -15,7 +15,9 @@ When enabled, the API runs a cycle every `PAPER_CYCLE_INTERVAL_SECONDS` (60 seco
 
 The default risk budget is `PAPER_RISK_PER_TRADE_PCT=0.1`, with a 50-position cap. These limits
 are intentionally conservative defaults for observing behavior, not a performance claim. The
-paper ledger is stored at `PAPER_STATE_FILE` and survives API restarts.
+paper ledger is stored at `PAPER_STATE_FILE` and survives API restarts. Relative paths are anchored
+to the API service directory, so starting the server from a different folder no longer creates a
+second empty ledger. Each save is atomic and keeps a `.bak` recovery copy.
 
 ## Workstation Controls
 
@@ -26,6 +28,9 @@ Use the `Paper` button in the header to open the virtual results section. It sho
 - An equity curve and the current position list with entry, current price, stop, target, quantity,
   risk, result, R-multiple, confidence, and strategy reasons.
 - Closed-trade history including exit reason, duration, return, MFE, MAE, and costs.
+- A Learning tab that records wins, losses, latest faults, and factor-level reliability. After
+  `PAPER_LEARNING_MIN_SAMPLES` outcomes, a small, paper-only reliability overlay can filter weak
+  future entries. It never changes the live strategy or enables MT5 orders.
 - A decision log showing cycles, opens, closes, controls, and errors.
 
 `Run now` starts a cycle immediately. `Reset` requires the exact confirmation shown in the dialog

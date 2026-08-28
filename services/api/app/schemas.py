@@ -105,6 +105,9 @@ class PaperTradeDTO(APIModel):
     ] | None
     max_favorable_excursion: float
     max_adverse_excursion: float
+    factor_categories: list[str]
+    learning_adjustment: float
+    learned_score: float
 
 
 class PaperDecisionDTO(APIModel):
@@ -125,6 +128,35 @@ class PaperEquityPointDTO(APIModel):
     equity: float
     balance: float
     unrealized_pnl: float
+
+
+class PaperFactorPerformanceDTO(APIModel):
+    factor: str
+    samples: int
+    wins: int
+    losses: int
+    win_rate: float
+    average_r_multiple: float
+
+
+class PaperLearningProfileDTO(APIModel):
+    enabled: bool
+    mode: str
+    observations: int
+    wins: int
+    losses: int
+    last_updated_at: datetime | None
+    last_fault: str
+    recommendation: str
+    factor_performance: list[PaperFactorPerformanceDTO]
+
+
+class PaperPersistenceStatusDTO(APIModel):
+    storage: str
+    state_version: int
+    status: str
+    last_saved_at: datetime | None
+    backup_available: bool
 
 
 class PaperEngineStatusDTO(APIModel):
@@ -176,6 +208,8 @@ class PaperPortfolioDTO(APIModel):
     closed_trades: list[PaperTradeDTO]
     decisions: list[PaperDecisionDTO]
     equity_curve: list[PaperEquityPointDTO]
+    learning: PaperLearningProfileDTO
+    persistence: PaperPersistenceStatusDTO
     disclaimer: str
 
 

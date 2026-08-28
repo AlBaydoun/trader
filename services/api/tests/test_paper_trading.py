@@ -111,3 +111,42 @@ def test_virtual_ledger_persists_without_broker_credentials(tmp_path: Path) -> N
     assert reloaded.metrics.open_positions == 1
     assert reloaded.open_positions[0].source_account_id == "test-account"
     assert "password" not in path.read_text(encoding="utf-8").lower()
+    assert reloaded.persistence.status == "saved"
+    assert reloaded.persistence.state_version == 2
+
+
+def test_closed_outcomes_are_persisted_as_learning_feedback(tmp_path: Path) -> None:
+    path = tmp_path / "paper.json"
+    service = make_service(path)
+    started = datetime(2026, 1, 1, tzinfo=UTC)
+
+    service.process_cycle(scan(opportunity(), now=started), {}, "test-account", started)
+    result = service.process_cycle(
+        scan(opportunity(), now=started + timedelta(minutes=1)),
+        {"XAUUSD": candle(low=98.8, high=102.2, close=100, now=started)},
+        "test-account",
+        started + timedelta(minutes=1),
+    )
+
+    assert result.learning.observations == 1
+    assert result.learning.losses == 1
+    assert result.learning.factor_performance[0].factor == "trend"
+    assert "XAUUSD" in result.learning.last_fault
+
+    reloaded = make_service(path).snapshot()
+    assert reloaded.learning.observations == 1
+    assert reloaded.learning.factor_performance[0].losses == 1
+
+
+def test_corrupt_primary_ledger_recovers_from_backup(tmp_path: Path) -> None:
+    path = tmp_path / "paper.json"
+    service = make_service(path)
+    started = datetime(2026, 1, 1, tzinfo=UTC)
+    service.process_cycle(scan(opportunity(), now=started), {}, "test-account", started)
+    service.update_control(max_open_positions=9)
+
+    path.write_text("{ damaged ledger", encoding="utf-8")
+    recovered = make_service(path).snapshot()
+
+    assert recovered.persistence.status == "recovered"
+    assert recovered.metrics.open_positions == 1
