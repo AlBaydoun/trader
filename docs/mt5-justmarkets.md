@@ -102,6 +102,20 @@ does not contain order-placement calls. Its optional common-file log is
 alerts are disabled. Use the chart's normal history controls to inspect earlier arrows and adjust
 the inputs for a different instrument or trading horizon.
 
+## Research Strategy Tester EA
+
+`integrations/mt5/TraderAI_ResearchTrendEA.mq5` is installed separately under
+`MQL5/Experts/TraderAI` and appears in MT5 Strategy Tester as
+**TraderAI_ResearchTrendEA**. It is based on trend-following and time-series-momentum research,
+with a prior-range breakout, EMA 20/50, RSI, MACD, ADX, completed H4 bias, ATR exits, risk-sized
+volume, and a custom drawdown-aware optimization criterion.
+
+The EA is enabled for simulated Strategy Tester trades but locked from live chart trading by
+default. On the connected JustMarkets terminal, use Navigator -> Expert Advisors -> TraderAI,
+right-click the EA, and choose **Test**. The full research rationale and a walk-forward testing
+checklist are in [Research Strategy Tester EA](research-trend-strategy.md). A short smoke test is
+only a runtime check; it is not evidence of future profitability.
+
 ### Historical indicator testing
 
 The workstation's `10/90 indicator history` section is a separate historical simulation of the

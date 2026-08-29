@@ -29,6 +29,8 @@ This project is **not** a profit guarantee and does not ship with live trading e
   threshold-entry alerts, cooldowns, browser sound, and optional voice announcements.
 - MT5 chart indicators for the M1 10/90 reversal setup and reusable multi-timeframe EMA/RSI/MACD/
   ADX trend confirmation on M5 through D1.
+- Standalone research-based MT5 Strategy Tester EA using breakout, trend, momentum, ATR risk,
+  walk-forward-friendly optimization scoring, and live-order locks.
 - Searchable left market drawer for adding, removing, and drag-ordering charts, plus direct chart
   move handles, with local persistence.
 - Chart zoom controls and candle inspection with exact start/end time, OHLC, and volume.
@@ -117,6 +119,7 @@ BROKER_ADAPTER=paper
 - [Whole-Market Scanner](docs/market-scanner.md)
 - [Virtual Paper Trading](docs/paper-trading.md)
 - [85/15 Extreme Scanner](docs/extreme-scanner.md)
+- [Research Strategy Tester EA](docs/research-trend-strategy.md)
 - [Operations Runbook](docs/operations.md)
 
 ## Repository Layout
