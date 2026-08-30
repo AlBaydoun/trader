@@ -73,9 +73,7 @@ class ExtremePaperTradingService:
 
         readings = {reading.symbol: reading for reading in scan.readings}
         alerts = [
-            alert
-            for alert in scan.alerts
-            if not self.confirmed_only or self._is_confirmed(alert)
+            alert for alert in scan.alerts if not self.confirmed_only or self._is_confirmed(alert)
         ]
         alerts.sort(key=lambda alert: abs(alert.score - 50), reverse=True)
         symbols = {position.symbol for position in self.ledger.positions()}
@@ -283,8 +281,24 @@ class ExtremePaperTradingService:
     @staticmethod
     def _is_confirmed(alert: ExtremeAlert) -> bool:
         if alert.level == "upper_85":
-            return alert.macd < 0 and alert.ema_fast < alert.ema_slow
-        return alert.macd > 0 and alert.ema_fast > alert.ema_slow
+            return (
+                alert.reversal_confirmed
+                and alert.candle_direction == "bearish"
+                and alert.rsi3 < 70
+                and alert.rsi7 < 60
+                and alert.momentum_pct < 0
+                and alert.macd < alert.macd_signal
+                and alert.ema_fast < alert.ema_slow
+            )
+        return (
+            alert.reversal_confirmed
+            and alert.candle_direction == "bullish"
+            and alert.rsi3 > 30
+            and alert.rsi7 > 40
+            and alert.momentum_pct > 0
+            and alert.macd > alert.macd_signal
+            and alert.ema_fast > alert.ema_slow
+        )
 
     @staticmethod
     def _atr(candles: list[Candle]) -> float:

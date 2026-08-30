@@ -23,26 +23,26 @@ class Settings(BaseSettings):
     market_scan_cache_seconds: int = Field(default=300, ge=15, le=3600)
 
     paper_auto_enabled: bool = True
-    paper_state_file: str = "../../data/paper-trading.json"
+    paper_state_file: str = "../../data/paper-regime-trading.json"
     paper_starting_balance: float = Field(default=10000.0, gt=0)
-    paper_risk_per_trade_pct: float = Field(default=0.1, ge=0.01, le=2.0)
-    paper_max_open_positions: int = Field(default=50, ge=1, le=200)
-    paper_min_opportunity_score: float = Field(default=0.0, ge=0.0, le=100.0)
+    paper_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
+    paper_max_open_positions: int = Field(default=3, ge=1, le=200)
+    paper_min_opportunity_score: float = Field(default=62.0, ge=0.0, le=100.0)
     paper_commission_bps: float = Field(default=1.0, ge=0.0, le=100.0)
     paper_slippage_bps: float = Field(default=1.0, ge=0.0, le=100.0)
     paper_cycle_interval_seconds: int = Field(default=60, ge=15, le=3600)
-    paper_max_position_minutes: int = Field(default=240, ge=1, le=43200)
+    paper_max_position_minutes: int = Field(default=120, ge=1, le=43200)
     paper_adaptive_learning_enabled: bool = True
     paper_learning_min_samples: int = Field(default=8, ge=3, le=1000)
 
     extreme_paper_auto_enabled: bool = True
-    extreme_paper_state_file: str = "../../data/extreme-paper-trading.json"
+    extreme_paper_state_file: str = "../../data/extreme-pullback-trading.json"
     extreme_paper_starting_balance: float = Field(default=10000.0, gt=0)
-    extreme_paper_risk_per_trade_pct: float = Field(default=0.1, ge=0.01, le=2.0)
-    extreme_paper_max_open_positions: int = Field(default=20, ge=1, le=200)
+    extreme_paper_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
+    extreme_paper_max_open_positions: int = Field(default=3, ge=1, le=200)
     extreme_paper_min_opportunity_score: float = Field(default=70.0, ge=0.0, le=100.0)
     extreme_paper_confirmed_only: bool = True
-    extreme_paper_max_position_minutes: int = Field(default=240, ge=1, le=43200)
+    extreme_paper_max_position_minutes: int = Field(default=60, ge=1, le=43200)
 
     strategy_lab_enabled: bool = True
     strategy_lab_state_dir: str = "../../data/strategy-lab"

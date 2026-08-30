@@ -184,9 +184,7 @@ class MT5ReadOnlyBridge:
                 return [], {}
 
             infos = [
-                info
-                for info in (self._module.symbols_get() or ())
-                if self._is_tradeable(info)
+                info for info in (self._module.symbols_get() or ()) if self._is_tradeable(info)
             ][:max_symbols]
             symbols: list[MT5MarketSymbol] = []
             candle_sets: dict[str, list[Candle]] = {}
@@ -197,14 +195,18 @@ class MT5ReadOnlyBridge:
                 was_visible = bool(getattr(info, "visible", False))
                 if not was_visible:
                     self._module.symbol_select(symbol, True)
-                rates = self._module.copy_rates_from_pos(symbol, timeframe_value, 0, limit)
+                rates = self._module.copy_rates_from_pos(symbol, timeframe_value, 0, limit + 1)
                 refreshed_info = self._module.symbol_info(symbol) or info
                 symbols.append(self._market_symbol(refreshed_info))
                 if not was_visible:
                     self._module.symbol_select(symbol, False)
-                if rates is None or len(rates) < 40:
+                if rates is None or len(rates) < 41:
                     continue
-                candle_sets[symbol] = self._rates_to_candles(symbol, timeframe, rates)
+                candle_sets[symbol] = self._rates_to_candles(
+                    symbol,
+                    timeframe,
+                    self._closed_rates(rates),
+                )
             return symbols, candle_sets
 
     def candles(
@@ -231,11 +233,11 @@ class MT5ReadOnlyBridge:
                 broker_symbol,
                 timeframe_value,
                 0,
-                limit,
+                limit + 1,
             )
             if rates is None:
                 return []
-            return self._rates_to_candles(symbol, timeframe, rates)
+            return self._rates_to_candles(symbol, timeframe, self._closed_rates(rates))
 
     def shutdown(self) -> None:
         with self._lock:
@@ -400,6 +402,14 @@ class MT5ReadOnlyBridge:
             )
             for rate in rates
         ]
+
+    @staticmethod
+    def _closed_rates(rates: Any) -> Any:
+        """Drop MT5 position zero, which is the still-forming candle."""
+        try:
+            return rates[:-1] if len(rates) > 1 else rates
+        except TypeError:
+            return rates
 
     @staticmethod
     def _is_tradeable(info: Any) -> bool:

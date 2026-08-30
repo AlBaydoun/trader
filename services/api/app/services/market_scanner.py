@@ -103,6 +103,8 @@ class MarketOpportunityScanner:
         metadata = {symbol.symbol: symbol for symbol in symbols}
         ranked: list[MarketOpportunity] = []
         for symbol, candles in candles_by_symbol.items():
+            if len(candles) < self.signal_engine.definition().minimum_candles:
+                continue
             signal = self.signal_engine.generate(candles)
             ranked.append(self._score(metadata[symbol], signal))
 

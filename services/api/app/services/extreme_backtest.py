@@ -341,7 +341,7 @@ class ExtremeBacktestService:
             signed_move *= -1
         return_pct = signed_move / entry_price * 100 if entry_price else 0.0
         r_multiple = signed_move / risk if risk else 0.0
-        outcome: ExtremeOutcome = (
+        final_outcome: ExtremeOutcome = (
             "win" if signed_move > 0 else "loss" if signed_move < 0 else "flat"
         )
         return (
@@ -355,7 +355,7 @@ class ExtremeBacktestService:
                 exit_price=round(final.close, 8),
                 stop_loss=round(stop_loss, 8),
                 take_profit=round(take_profit, 8),
-                outcome=outcome,
+                outcome=final_outcome,
                 exit_reason="data_end",
                 return_pct=round(return_pct, 4),
                 r_multiple=round(r_multiple, 4),

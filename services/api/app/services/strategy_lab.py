@@ -89,6 +89,32 @@ class MomentumReleaseProfile(ScalpStrategyProfile):
         )
 
 
+class RegimeAlignedPullbackProfile(ScalpStrategyProfile):
+    """Only accepts an extreme after the short-term reversal agrees with the regime."""
+
+    def _upper_confirmation(self, reading: ExtremeReading) -> bool:
+        return (
+            reading.reversal_confirmed
+            and reading.candle_direction == "bearish"
+            and reading.rsi3 < 70
+            and reading.rsi7 < 60
+            and reading.momentum_pct < 0
+            and reading.macd_histogram < 0
+            and reading.ema_fast < reading.ema_slow
+        )
+
+    def _lower_confirmation(self, reading: ExtremeReading) -> bool:
+        return (
+            reading.reversal_confirmed
+            and reading.candle_direction == "bullish"
+            and reading.rsi3 > 30
+            and reading.rsi7 > 40
+            and reading.momentum_pct > 0
+            and reading.macd_histogram > 0
+            and reading.ema_fast > reading.ema_slow
+        )
+
+
 STRATEGY_PROFILES: tuple[ScalpStrategyProfile, ...] = (
     ExtremeReversionProfile(
         id="extreme-reversion-90-10",
@@ -142,6 +168,25 @@ STRATEGY_PROFILES: tuple[ScalpStrategyProfile, ...] = (
             "Composite score at least 80 for sells or at most 20 for buys",
             "RSI(3) and RSI(7) both move away from the extreme",
             "Four-candle momentum changes in the trade direction",
+        ],
+    ),
+    RegimeAlignedPullbackProfile(
+        id="regime-aligned-pullback",
+        name="Regime-Aligned Pullback",
+        summary=(
+            "Most selective M1 scalp: an 85/15 alert is only tradable after rejection, "
+            "RSI(3/7), momentum, MACD histogram, and EMA direction all agree."
+        ),
+        upper_level=85.0,
+        lower_level=15.0,
+        target_r=1.5,
+        stop_atr=1.2,
+        max_minutes=30,
+        criteria=[
+            "Composite score at least 85 for sells or at most 15 for buys",
+            "Reversal candle plus RSI(3) and RSI(7) move away from the extreme",
+            "Four-candle momentum and MACD histogram confirm the reversal",
+            "EMA(5/6) agrees with the reversal direction",
         ],
     ),
 )
@@ -204,9 +249,11 @@ class ScalpStrategyLabService:
         self.timeframe = scan.timeframe
         self.generated_at = scan.generated_at
         for member in self.members:
-            candidates = [
-                reading for reading in scan.readings if member.profile.qualifies(reading)
-            ] if member.executor.enabled else []
+            candidates = (
+                [reading for reading in scan.readings if member.profile.qualifies(reading)]
+                if member.executor.enabled
+                else []
+            )
             member.candidates_last_cycle = len(candidates)
             member.executor.process_readings(
                 scan,

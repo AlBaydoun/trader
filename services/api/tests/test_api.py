@@ -144,9 +144,10 @@ def test_strategy_endpoint_explains_active_rules(account_registry: AccountRegist
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["name"] == "Trend, Momentum and Structure"
+    assert payload["name"] == "Regime-Aligned Pullback"
+    assert payload["version"] == "2.0"
     assert payload["adaptive_learning"] is True
-    assert len(payload["components"]) == 4
+    assert len(payload["components"]) == 5
 
 
 def test_paper_portfolio_is_explicitly_virtual(account_registry: AccountRegistry) -> None:

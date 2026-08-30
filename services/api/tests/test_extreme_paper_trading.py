@@ -71,7 +71,7 @@ def scan(*, now: datetime, alerts: list[ExtremeAlert]) -> ExtremeScanResult:
         level="upper_85",
         rsi1=100,
         macd=-0.2,
-        macd_signal=-0.2,
+        macd_signal=-0.1,
         macd_histogram=0,
         ema_fast=99,
         ema_slow=100,
@@ -103,13 +103,18 @@ def alert(triggered_at: datetime) -> ExtremeAlert:
         score=90,
         rsi1=100,
         macd=-0.2,
-        macd_signal=-0.2,
+        macd_signal=-0.1,
         ema_fast=99,
         ema_slow=100,
         recommendation="Reversal sell watch: MACD and MA confirm weakness.",
         reasons=["RSI(1) reached the upper extreme."],
         triggered_at=triggered_at,
         source="mt5",
+        rsi3=60,
+        rsi7=50,
+        momentum_pct=-0.1,
+        candle_direction="bearish",
+        reversal_confirmed=True,
     )
 
 

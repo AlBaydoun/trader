@@ -9,13 +9,15 @@ This project is **not** a profit guarantee and does not ship with live trading e
 - Responsive workstation UI for Windows 11 desktops, multi-monitor layouts, and Android phones.
 - Splittable chart grid with priority symbols: `XAUUSD`, `XAGUSD`, `BTCUSD`, `US100.std`, `US30.std`, `WTI.m`, and `BRENT.m`.
 - Signal-only and auto-trade modes, with auto-trade locked behind server-side live-trading guardrails.
-- Explainable signal engine with trend, momentum, volatility, risk, and event/news rationale.
+- Explainable Regime-Aligned Pullback signal engine with EMA slope, ADX/DI strength, RSI(14)
+  mid-zone momentum, pullback/breakout structure, volume, volatility, and event/news rationale.
 - Paper broker as the default execution engine.
 - Persistent virtual trading ledger that opens, marks, closes, and reports every eligible paper
   position with entry, exit, fees, risk, R-multiple, MFE/MAE, equity, decision history, and
   paper-only learning from closed-trade outcomes.
-- Separate persistent Extreme Virtual Trading ledger for confirmed RSI(1) 85/15 plus MACD/MA
-  entries, including signal-time price, modeled fill, live virtual P/L, exit result, and learning.
+- Separate persistent Extreme Virtual Trading ledger for confirmed RSI(1) 85/15 plus rejection,
+  RSI(3/7), momentum, MACD histogram, and EMA agreement, including signal-time price, modeled
+  fill, live virtual P/L, exit result, and learning.
 - MT5/JustMarkets integration boundary with a disabled-by-default adapter contract.
 - Persistent multi-account profiles with masked logins and an in-workstation account selector.
 - Windows MT5 read-only bridge for verified account metrics, broker quotes, and open positions.
@@ -120,6 +122,7 @@ BROKER_ADAPTER=paper
 - [News Analysis](docs/news-analysis.md)
 - [Whole-Market Scanner](docs/market-scanner.md)
 - [Virtual Paper Trading](docs/paper-trading.md)
+- [Regime-Aligned Strategy](docs/regime-aligned-strategy.md)
 - [85/15 Extreme Scanner](docs/extreme-scanner.md)
 - [Research Strategy Tester EA](docs/research-trend-strategy.md)
 - [Chart Indicators and AI Reading](docs/chart-indicators.md)

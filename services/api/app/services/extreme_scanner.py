@@ -181,14 +181,28 @@ class ExtremeSignalScanner:
         momentum_pct = self._momentum_pct(closes, 4)
         candle_direction = self._candle_direction(candles[-1])
         reversal_confirmed = (
-            (level == "upper_85" and candle_direction == "bearish" and rsi3 < 80)
-            or (level == "lower_15" and candle_direction == "bullish" and rsi3 > 20)
+            level == "upper_85"
+            and candle_direction == "bearish"
+            and rsi3 < 70
+            and rsi7 < 60
+            and momentum_pct < 0
+            and macd_histogram < 0
+            and ema_fast < ema_slow
+        ) or (
+            level == "lower_15"
+            and candle_direction == "bullish"
+            and rsi3 > 30
+            and rsi7 > 40
+            and momentum_pct > 0
+            and macd_histogram > 0
+            and ema_fast > ema_slow
         )
         recommendation, reasons = self._recommendation(
             level,
             rsi1,
             rsi3,
             rsi7,
+            momentum_pct,
             macd,
             macd_signal,
             macd_histogram,
@@ -260,6 +274,7 @@ class ExtremeSignalScanner:
         rsi1: float,
         rsi3: float,
         rsi7: float,
+        momentum_pct: float,
         macd: float,
         macd_signal: float,
         macd_histogram: float,
@@ -270,7 +285,7 @@ class ExtremeSignalScanner:
         reversal_confirmed: bool,
     ) -> tuple[str, list[str]]:
         if level == "upper_85":
-            confirmed = reversal_confirmed and macd_histogram < 0
+            confirmed = reversal_confirmed
             recommendation = (
                 "Scalp sell candidate: 85/15 extreme plus a bearish rejection and "
                 "falling MACD histogram."
@@ -279,7 +294,7 @@ class ExtremeSignalScanner:
                 "MACD histogram before selling."
             )
         elif level == "lower_15":
-            confirmed = reversal_confirmed and macd_histogram > 0
+            confirmed = reversal_confirmed
             recommendation = (
                 "Scalp buy candidate: 85/15 extreme plus a bullish rejection and "
                 "rising MACD histogram."
@@ -304,6 +319,8 @@ class ExtremeSignalScanner:
                 f"RSI(3) is {rsi3:.2f} and RSI(7) is {rsi7:.2f}; the latest candle is "
                 f"{candle_direction}."
             ),
+            f"Four-candle momentum is {momentum_pct:+.4f}%; reversal stack is "
+            f"{'confirmed' if reversal_confirmed else 'not confirmed'}.",
             (
                 f"Fast moving average is {ma_state} the slow moving average; ATR context is "
                 f"{atr:.8g}. Reversal trigger: {'confirmed' if reversal_confirmed else 'waiting'}."
