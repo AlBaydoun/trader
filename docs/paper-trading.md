@@ -41,6 +41,22 @@ positions, or reset only the extreme ledger. Use the extreme panel's `Profit sin
 `Win rate`, `Profit factor`, history, and learning tabs to evaluate the filter over a meaningful
 sample instead of optimizing for a single trade.
 
+## Jdub Traders Virtual Strategy
+
+`Jdub Traders` is a separate paper-only ledger based on the explicit framework in the linked Jdub
+Trades video. It scans the full tradeable MT5 catalog on M1, marks the high and low of the first
+15-minute New York session candle (09:30-09:45 ET), waits for a completed M5 close, and evaluates
+the M1 breakout, break-and-retest, and reversal entry models. It permits at most one setup per
+symbol per New York session and persists that session guard so an API restart does not duplicate a
+setup.
+
+The video leaves stop placement and model selection partly discretionary. The implementation uses
+an explicit structural stop assumption and a 1.5R virtual target so results are reproducible; each
+paper signal displays those assumptions in its reasons. This is a mechanical interpretation, not a
+claim that it reproduces the creator's discretionary execution or guarantees performance. Its
+ledger is stored at `JDUB_PAPER_STATE_FILE`, with session guards at
+`JDUB_PAPER_SESSION_STATE_FILE`.
+
 ## Workstation Controls
 
 Use the `Paper` button in the header to open the virtual results section. It shows:

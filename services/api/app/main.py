@@ -49,6 +49,7 @@ from app.services.backtest import BacktestService
 from app.services.extreme_backtest import ExtremeBacktestService
 from app.services.extreme_paper_trading import ExtremePaperTradingService
 from app.services.extreme_scanner import ExtremeScanResult, ExtremeSignalScanner
+from app.services.jdub_traders import JdubTradersService
 from app.services.market_data import MarketDataService
 from app.services.market_scanner import MarketOpportunityScanner
 from app.services.mt5_bridge import MT5ConnectionSnapshot, MT5ReadOnlyBridge
@@ -111,6 +112,25 @@ paper_trader = PaperTradingService(
     max_position_minutes=settings.paper_max_position_minutes,
     adaptive_learning_enabled=settings.paper_adaptive_learning_enabled,
     learning_min_samples=settings.paper_learning_min_samples,
+)
+jdub_trader = JdubTradersService(
+    PaperTradingService(
+        settings.jdub_paper_state_file,
+        enabled=settings.jdub_paper_auto_enabled,
+        starting_balance=settings.jdub_paper_starting_balance,
+        risk_per_trade_pct=settings.jdub_paper_risk_per_trade_pct,
+        max_open_positions=settings.jdub_paper_max_open_positions,
+        minimum_opportunity_score=settings.jdub_paper_min_opportunity_score,
+        commission_bps=settings.paper_commission_bps,
+        slippage_bps=settings.paper_slippage_bps,
+        cycle_interval_seconds=settings.jdub_paper_cycle_interval_seconds,
+        max_position_minutes=settings.jdub_paper_max_position_minutes,
+        adaptive_learning_enabled=settings.paper_adaptive_learning_enabled,
+        learning_min_samples=settings.paper_learning_min_samples,
+        trade_source="jdub-traders-virtual",
+    ),
+    mt5_bridge,
+    settings.jdub_paper_session_state_file,
 )
 extreme_paper_trader = ExtremePaperTradingService(
     PaperTradingService(
@@ -252,6 +272,17 @@ def run_paper_cycle(force: bool = False) -> PaperPortfolio:
         return portfolio
 
 
+def run_jdub_cycle(force: bool = False) -> PaperPortfolio:
+    with paper_cycle_lock:
+        account = account_registry.active_account()
+        return jdub_trader.process_cycle(
+            account,
+            settings.market_scan_max_symbols,
+            settings.market_scan_max_symbols,
+            force=force,
+        )
+
+
 def run_extreme_cycle(
     force: bool = False,
     process_virtual_trades: bool = False,
@@ -287,6 +318,17 @@ async def paper_trading_loop() -> None:
         await asyncio.sleep(paper_trader.cycle_interval_seconds)
 
 
+async def jdub_trading_loop() -> None:
+    await asyncio.sleep(12)
+    while True:
+        if jdub_trader.enabled:
+            try:
+                await asyncio.to_thread(run_jdub_cycle)
+            except Exception as exc:
+                jdub_trader.ledger.record_error(f"Jdub Traders virtual cycle failed: {exc}")
+        await asyncio.sleep(jdub_trader.ledger.cycle_interval_seconds)
+
+
 async def extreme_scanning_loop() -> None:
     await asyncio.sleep(8)
     while True:
@@ -303,14 +345,18 @@ async def extreme_scanning_loop() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     paper_task = asyncio.create_task(paper_trading_loop())
+    jdub_task = asyncio.create_task(jdub_trading_loop())
     extreme_task = asyncio.create_task(extreme_scanning_loop())
     try:
         yield
     finally:
         paper_task.cancel()
+        jdub_task.cancel()
         extreme_task.cancel()
         with suppress(asyncio.CancelledError):
             await paper_task
+        with suppress(asyncio.CancelledError):
+            await jdub_task
         with suppress(asyncio.CancelledError):
             await extreme_task
         mt5_bridge.shutdown()
@@ -511,6 +557,11 @@ def paper_portfolio() -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(paper_trader.snapshot())
 
 
+@app.get("/paper/jdub/portfolio", response_model=PaperPortfolioDTO)
+def jdub_paper_portfolio() -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(jdub_trader.snapshot())
+
+
 @app.get("/paper/extreme/portfolio", response_model=PaperPortfolioDTO)
 def extreme_paper_portfolio() -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(extreme_paper_trader.snapshot())
@@ -524,6 +575,17 @@ def paper_strategy_lab() -> StrategyLabDTO:
 @app.post("/paper/control", response_model=PaperPortfolioDTO)
 def control_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
     portfolio = paper_trader.update_control(
+        enabled=payload.enabled,
+        timeframe=payload.timeframe,
+        minimum_opportunity_score=payload.minimum_opportunity_score,
+        max_open_positions=payload.max_open_positions,
+    )
+    return PaperPortfolioDTO.model_validate(portfolio)
+
+
+@app.post("/paper/jdub/control", response_model=PaperPortfolioDTO)
+def control_jdub_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
+    portfolio = jdub_trader.update_control(
         enabled=payload.enabled,
         timeframe=payload.timeframe,
         minimum_opportunity_score=payload.minimum_opportunity_score,
@@ -546,6 +608,11 @@ def control_extreme_paper_trading(payload: PaperControlRequestDTO) -> PaperPortf
 @app.post("/paper/cycle", response_model=PaperPortfolioDTO)
 def cycle_paper_trading(force: bool = Query(default=False)) -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(run_paper_cycle(force))
+
+
+@app.post("/paper/jdub/cycle", response_model=PaperPortfolioDTO)
+def cycle_jdub_paper_trading(force: bool = Query(default=True)) -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(run_jdub_cycle(force))
 
 
 @app.post("/paper/extreme/cycle", response_model=PaperPortfolioDTO)
@@ -615,6 +682,30 @@ def close_paper_position(trade_id: str) -> PaperPortfolioDTO:
     )
 
 
+@app.post("/paper/jdub/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
+def close_jdub_paper_position(trade_id: str) -> PaperPortfolioDTO:
+    position = next(
+        (item for item in jdub_trader.positions() if item.id == trade_id),
+        None,
+    )
+    if position is None:
+        raise HTTPException(status_code=404, detail="Open Jdub Traders virtual position not found.")
+    candles = mt5_bridge.candles(
+        account_registry.active_account(),
+        position.symbol,
+        jdub_trader.ledger.timeframe,
+        80,
+    )
+    if not candles:
+        raise HTTPException(
+            status_code=409,
+            detail="A verified current MT5 price is required to close the Jdub virtual position.",
+        )
+    return PaperPortfolioDTO.model_validate(
+        jdub_trader.close_trade(trade_id, candles[-1].close)
+    )
+
+
 @app.post("/paper/extreme/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
 def close_extreme_paper_position(trade_id: str) -> PaperPortfolioDTO:
     position = next(
@@ -646,6 +737,13 @@ def reset_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
     if payload.confirmation != "RESET PAPER ACCOUNT":
         raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
     return PaperPortfolioDTO.model_validate(paper_trader.reset())
+
+
+@app.post("/paper/jdub/reset", response_model=PaperPortfolioDTO)
+def reset_jdub_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
+    if payload.confirmation != "RESET PAPER ACCOUNT":
+        raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
+    return PaperPortfolioDTO.model_validate(jdub_trader.reset())
 
 
 @app.post("/paper/extreme/reset", response_model=PaperPortfolioDTO)

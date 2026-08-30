@@ -18,6 +18,7 @@ import {
   getMT5Quotes,
   getMarketSymbols,
   getNewsAnalysis,
+  getJdubPaperPortfolio,
   getExtremePaperPortfolio,
   getStrategyLab,
   getPaperPortfolio,
@@ -28,13 +29,17 @@ import {
   scanWholeMarket,
   setActiveAccount,
   closePaperPosition,
+  closeJdubPaperPosition,
   closeExtremePaperPosition,
   resetExtremePaperPortfolio,
+  resetJdubPaperPortfolio,
   resetPaperPortfolio,
+  runJdubPaperCycle,
   runExtremePaperCycle,
   runStrategyLabCycle,
   runPaperCycle,
   updateExtremePaperControl,
+  updateJdubPaperControl,
   updateStrategyLabControl,
   updatePaperControl
 } from "./lib/api";
@@ -92,6 +97,9 @@ export function App() {
   const [paperPortfolio, setPaperPortfolio] = useState<PaperPortfolio>();
   const [paperBusy, setPaperBusy] = useState(false);
   const [paperError, setPaperError] = useState("");
+  const [jdubPaperPortfolio, setJdubPaperPortfolio] = useState<PaperPortfolio>();
+  const [jdubPaperBusy, setJdubPaperBusy] = useState(false);
+  const [jdubPaperError, setJdubPaperError] = useState("");
   const [extremePaperPortfolio, setExtremePaperPortfolio] = useState<PaperPortfolio>();
   const [extremePaperBusy, setExtremePaperBusy] = useState(false);
   const [extremePaperError, setExtremePaperError] = useState("");
@@ -158,6 +166,17 @@ export function App() {
     const interval = window.setInterval(() => void refreshPaper(), 10000);
     return () => window.clearInterval(interval);
   }, [refreshPaper]);
+
+  const refreshJdubPaper = useCallback(async () => {
+    const portfolio = await getJdubPaperPortfolio().catch(() => null);
+    if (portfolio) setJdubPaperPortfolio(portfolio);
+  }, []);
+
+  useEffect(() => {
+    void refreshJdubPaper();
+    const interval = window.setInterval(() => void refreshJdubPaper(), 10000);
+    return () => window.clearInterval(interval);
+  }, [refreshJdubPaper]);
 
   const refreshExtremePaper = useCallback(async () => {
     const portfolio = await getExtremePaperPortfolio().catch(() => null);
@@ -373,6 +392,55 @@ export function App() {
       setPaperError(error instanceof Error ? error.message : "Virtual market cycle failed.");
     } finally {
       setPaperBusy(false);
+    }
+  }
+
+  async function controlJdubPaper(control: PaperControl) {
+    setJdubPaperBusy(true);
+    setJdubPaperError("");
+    try {
+      setJdubPaperPortfolio(await updateJdubPaperControl(control));
+    } catch (error) {
+      setJdubPaperError(error instanceof Error ? error.message : "Jdub Traders control update failed.");
+    } finally {
+      setJdubPaperBusy(false);
+    }
+  }
+
+  async function runJdubVirtualCycle() {
+    setJdubPaperBusy(true);
+    setJdubPaperError("");
+    try {
+      setJdubPaperPortfolio(await runJdubPaperCycle(true));
+    } catch (error) {
+      setJdubPaperError(error instanceof Error ? error.message : "Jdub Traders virtual cycle failed.");
+    } finally {
+      setJdubPaperBusy(false);
+    }
+  }
+
+  async function closeJdubVirtualPosition(tradeId: string) {
+    setJdubPaperBusy(true);
+    setJdubPaperError("");
+    try {
+      setJdubPaperPortfolio(await closeJdubPaperPosition(tradeId));
+    } catch (error) {
+      setJdubPaperError(error instanceof Error ? error.message : "Jdub Traders position could not close.");
+    } finally {
+      setJdubPaperBusy(false);
+    }
+  }
+
+  async function resetJdubVirtualPortfolio() {
+    if (!window.confirm("Reset all Jdub Traders virtual trades, history, and performance results?")) return;
+    setJdubPaperBusy(true);
+    setJdubPaperError("");
+    try {
+      setJdubPaperPortfolio(await resetJdubPaperPortfolio());
+    } catch (error) {
+      setJdubPaperError(error instanceof Error ? error.message : "Jdub Traders reset failed.");
+    } finally {
+      setJdubPaperBusy(false);
     }
   }
 
@@ -612,6 +680,16 @@ export function App() {
         onRun={() => void runVirtualCycle()}
         onClose={(tradeId) => void closeVirtualPosition(tradeId)}
         onReset={() => void resetVirtualPortfolio()}
+      />
+      <PaperTradingPanel
+        variant="jdub"
+        portfolio={jdubPaperPortfolio}
+        busy={jdubPaperBusy}
+        error={jdubPaperError}
+        onControl={(control) => void controlJdubPaper(control)}
+        onRun={() => void runJdubVirtualCycle()}
+        onClose={(tradeId) => void closeJdubVirtualPosition(tradeId)}
+        onReset={() => void resetJdubVirtualPortfolio()}
       />
       <ExtremeAlertsPanel
         scan={extremeScan}

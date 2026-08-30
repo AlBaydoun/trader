@@ -13,7 +13,7 @@ import {
 import type { PaperControl, PaperEquityPoint, PaperPortfolio, PaperTrade } from "../types";
 
 type PaperTab = "open" | "history" | "daily" | "learning" | "log";
-type PaperTradingVariant = "market" | "extreme";
+type PaperTradingVariant = "market" | "jdub" | "extreme";
 
 interface PaperTradingPanelProps {
   variant?: PaperTradingVariant;
@@ -38,18 +38,19 @@ export function PaperTradingPanel({
 }: PaperTradingPanelProps) {
   const [tab, setTab] = useState<PaperTab>("open");
   const extreme = variant === "extreme";
+  const jdub = variant === "jdub";
   const engine = portfolio?.engine;
   const metrics = portfolio?.metrics;
-  const panelId = extreme ? "extreme-paper-trading" : "paper-trading";
+  const panelId = extreme ? "extreme-paper-trading" : jdub ? "jdub-trading" : "paper-trading";
 
   return (
-    <section className="paper-workspace" id={panelId} aria-label={extreme ? "Extreme virtual trading" : "Virtual paper trading"}>
+    <section className="paper-workspace" id={panelId} aria-label={extreme ? "Extreme virtual trading" : jdub ? "Jdub Traders virtual trading" : "Virtual paper trading"}>
       <header className="paper-header">
         <div className="paper-title">
           <span className="paper-title-icon"><FlaskConical size={19} /></span>
           <div>
-            <h2>{extreme ? "Extreme Virtual Trading" : "Virtual Trading"}</h2>
-            <span>{extreme ? "Confirmed 85/15 reversal simulation with no real money" : "Automatic whole-market simulation with no real money"}</span>
+            <h2>{extreme ? "Extreme Virtual Trading" : jdub ? "Jdub Traders" : "Virtual Trading"}</h2>
+            <span>{extreme ? "Confirmed 85/15 reversal simulation with no real money" : jdub ? "New York opening-range simulation with no real money" : "Automatic whole-market simulation with no real money"}</span>
           </div>
         </div>
         <div className="paper-actions">
@@ -70,8 +71,8 @@ export function PaperTradingPanel({
           <button
             className="icon-button"
             type="button"
-            title={extreme ? "Reset extreme virtual portfolio" : "Reset virtual portfolio"}
-            aria-label={extreme ? "Reset extreme virtual portfolio" : "Reset virtual portfolio"}
+            title={extreme ? "Reset extreme virtual portfolio" : jdub ? "Reset Jdub Traders virtual portfolio" : "Reset virtual portfolio"}
+            aria-label={extreme ? "Reset extreme virtual portfolio" : jdub ? "Reset Jdub Traders virtual portfolio" : "Reset virtual portfolio"}
             disabled={busy}
             onClick={onReset}
           >
@@ -100,7 +101,7 @@ export function PaperTradingPanel({
 
       {metrics && engine ? (
         <>
-          <div className="paper-metrics" aria-label={extreme ? "Extreme virtual trading performance" : "Paper trading performance"}>
+          <div className="paper-metrics" aria-label={extreme ? "Extreme virtual trading performance" : jdub ? "Jdub Traders virtual trading performance" : "Paper trading performance"}>
             <PaperMetric label="Virtual equity" value={money(metrics.equity)} change={metrics.total_return_pct} />
             <PaperMetric label={extreme ? "Profit since signals" : "Net result"} value={signedMoney(metrics.realized_pnl + metrics.unrealized_pnl)} />
             <PaperMetric label="Open / closed" value={`${metrics.open_positions} / ${metrics.closed_trades}`} />
@@ -129,12 +130,12 @@ export function PaperTradingPanel({
               <div className="paper-subheading">
                 <div>
                   <strong>Simulation rules</strong>
-                  <span>{extreme ? "Applied only after RSI(1), MACD, and MA confirmation" : "Applied to every eligible directional signal"}</span>
+                  <span>{extreme ? "Applied only after RSI(1), MACD, and MA confirmation" : jdub ? "15m New York range, 5m close, then 1m trigger" : "Applied to every eligible directional signal"}</span>
                 </div>
               </div>
               <dl>
                 <div><dt>Market coverage</dt><dd>{engine.scanned_symbols || "--"} instruments</dd></div>
-                <div><dt>Entry filter</dt><dd>{extreme ? `Confirmed 85/15 · score ${engine.minimum_opportunity_score}+` : engine.minimum_opportunity_score === 0 ? "All strategy signals" : `Score ${engine.minimum_opportunity_score}+`}</dd></div>
+                <div><dt>Entry filter</dt><dd>{extreme ? `Confirmed 85/15 · score ${engine.minimum_opportunity_score}+` : jdub ? `Opening range · score ${engine.minimum_opportunity_score}+` : engine.minimum_opportunity_score === 0 ? "All strategy signals" : `Score ${engine.minimum_opportunity_score}+`}</dd></div>
                 <div><dt>Risk per trade</dt><dd>{engine.risk_per_trade_pct.toFixed(2)}%</dd></div>
                 <div><dt>Position limit</dt><dd>{engine.max_open_positions}</dd></div>
                 <div><dt>Cycle</dt><dd>{engine.timeframe} / {engine.cycle_interval_seconds}s</dd></div>
@@ -163,8 +164,8 @@ export function PaperTradingPanel({
                 <span>Minimum opportunity score <b>{engine.minimum_opportunity_score.toFixed(0)}</b></span>
                 <input
                   type="range"
-                  min={extreme ? "70" : "0"}
-                  max={extreme ? "100" : "80"}
+                  min={extreme ? "70" : jdub ? "50" : "0"}
+                  max={extreme || jdub ? "100" : "80"}
                   step="5"
                   value={engine.minimum_opportunity_score}
                   disabled={busy}
