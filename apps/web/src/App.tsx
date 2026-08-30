@@ -623,6 +623,7 @@ export function App() {
         onTimeframeChange={setTimeframe}
         onAccountChange={(accountId) => void switchAccount(accountId)}
         onRefresh={() => void refresh()}
+        onOpenDashboard={() => scrollToPanel("virtual-dashboard")}
         onOpenPaper={openPaperPanel}
         onOpenExtreme={openExtremePanel}
       />
@@ -686,6 +687,7 @@ export function App() {
         onRun={() => void runVirtualCycle()}
         onClose={(tradeId) => void closeVirtualPosition(tradeId)}
         onReset={() => void resetVirtualPortfolio()}
+        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
       />
       <PaperTradingPanel
         variant="jdub"
@@ -696,6 +698,7 @@ export function App() {
         onRun={() => void runJdubVirtualCycle()}
         onClose={(tradeId) => void closeJdubVirtualPosition(tradeId)}
         onReset={() => void resetJdubVirtualPortfolio()}
+        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
       />
       <ExtremeAlertsPanel
         scan={extremeScan}
@@ -714,6 +717,7 @@ export function App() {
         error={strategyLabError}
         onRun={() => void runStrategyLabCycleNow()}
         onControl={(strategyId, control) => void controlStrategyLab(strategyId, control)}
+        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
       />
       <PaperTradingPanel
         variant="extreme"
@@ -724,6 +728,7 @@ export function App() {
         onRun={() => void runExtremeVirtualCycle()}
         onClose={(tradeId) => void closeExtremeVirtualPosition(tradeId)}
         onReset={() => void resetExtremeVirtualPortfolio()}
+        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
       />
     </main>
   );

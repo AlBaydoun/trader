@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  ArrowUp,
   BrainCircuit,
   CheckCircle2,
   CircleStop,
@@ -17,9 +18,10 @@ interface StrategyLabPanelProps {
   error: string;
   onRun: () => void;
   onControl: (strategyId: string, control: PaperControl) => void;
+  onBackToDashboard: () => void;
 }
 
-export function StrategyLabPanel({ snapshot, busy, error, onRun, onControl }: StrategyLabPanelProps) {
+export function StrategyLabPanel({ snapshot, busy, error, onRun, onControl, onBackToDashboard }: StrategyLabPanelProps) {
   const [activeId, setActiveId] = useState("");
   const active = snapshot?.strategies.find((strategy) => strategy.id === activeId)
     ?? snapshot?.strategies[0];
@@ -39,11 +41,18 @@ export function StrategyLabPanel({ snapshot, busy, error, onRun, onControl }: St
             <h2>M1 Scalp Strategy Lab</h2>
             <span>Competing paper-only rules learn from the same live MT5 observations</span>
           </div>
+          <span className="strategy-lab-timeframe">Timeframe {snapshot ? formatTimeframe(snapshot.timeframe) : "--"}</span>
         </div>
-        <button className="icon-text" type="button" disabled={busy} onClick={onRun}>
-          {busy ? <RefreshCcw className="spin" size={15} /> : <Play size={15} />}
-          Run all now
-        </button>
+        <div className="strategy-lab-actions">
+          <button className="icon-text dashboard-return" type="button" onClick={onBackToDashboard}>
+            <ArrowUp size={14} />
+            Dashboard
+          </button>
+          <button className="icon-text" type="button" disabled={busy} onClick={onRun}>
+            {busy ? <RefreshCcw className="spin" size={15} /> : <Play size={15} />}
+            Run all now
+          </button>
+        </div>
       </header>
 
       <div className={`strategy-lab-status ${error ? "error" : ""}`}>
@@ -183,3 +192,14 @@ function statusText(snapshot?: StrategyLabSnapshot): string {
 const moneyFormatter = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 function money(value: number) { return moneyFormatter.format(value); }
 function signedMoney(value: number) { return `${value > 0 ? "+" : ""}${money(value)}`; }
+function formatTimeframe(value: string) {
+  const labels: Record<string, string> = {
+    "1m": "1m (M1)",
+    "5m": "5m (M5)",
+    "15m": "15m (M15)",
+    "1h": "1h (H1)",
+    "4h": "4h (H4)",
+    "1d": "1d (D1)"
+  };
+  return labels[value] ?? value;
+}

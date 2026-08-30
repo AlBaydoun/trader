@@ -1,4 +1,4 @@
-import { Activity, BellRing, CircleUserRound, FlaskConical, LayoutGrid, Menu, RefreshCw, ShieldCheck } from "lucide-react";
+import { Activity, BellRing, CircleUserRound, FlaskConical, LayoutDashboard, LayoutGrid, Menu, RefreshCw, ShieldCheck } from "lucide-react";
 import type { BrokerAccount, MT5Connection, TradeMode } from "../types";
 
 interface WorkspaceHeaderProps {
@@ -19,6 +19,7 @@ interface WorkspaceHeaderProps {
   onTimeframeChange: (timeframe: string) => void;
   onAccountChange: (accountId: string) => void;
   onRefresh: () => void;
+  onOpenDashboard: () => void;
   onOpenPaper: () => void;
   onOpenExtreme: () => void;
 }
@@ -43,6 +44,7 @@ export function WorkspaceHeader({
   onTimeframeChange,
   onAccountChange,
   onRefresh,
+  onOpenDashboard,
   onOpenPaper,
   onOpenExtreme
 }: WorkspaceHeaderProps) {
@@ -85,6 +87,10 @@ export function WorkspaceHeader({
         <button className="icon-text pair-count" type="button" onClick={onOpenSymbols}>
           <LayoutGrid size={15} />
           {selectedCount} charts
+        </button>
+        <button className="icon-text dashboard-jump" type="button" onClick={onOpenDashboard}>
+          <LayoutDashboard size={15} />
+          Dashboard
         </button>
         <button className="icon-text paper-jump" type="button" onClick={onOpenPaper}>
           <FlaskConical size={15} />

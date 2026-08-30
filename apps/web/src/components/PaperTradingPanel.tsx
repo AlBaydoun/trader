@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Activity,
+  ArrowUp,
   BrainCircuit,
   CircleStop,
   Database,
@@ -24,6 +25,7 @@ interface PaperTradingPanelProps {
   onRun: () => void;
   onClose: (tradeId: string) => void;
   onReset: () => void;
+  onBackToDashboard: () => void;
 }
 
 export function PaperTradingPanel({
@@ -34,7 +36,8 @@ export function PaperTradingPanel({
   onControl,
   onRun,
   onClose,
-  onReset
+  onReset,
+  onBackToDashboard
 }: PaperTradingPanelProps) {
   const [tab, setTab] = useState<PaperTab>("open");
   const extreme = variant === "extreme";
@@ -50,10 +53,15 @@ export function PaperTradingPanel({
           <span className="paper-title-icon"><FlaskConical size={19} /></span>
           <div>
             <h2>{extreme ? "Extreme Virtual Trading" : jdub ? "Jdub Traders" : "Virtual Trading"}</h2>
-            <span>{extreme ? "Confirmed 85/15 reversal simulation with no real money" : jdub ? "New York opening-range simulation with no real money" : "Automatic whole-market simulation with no real money"}</span>
+            <span>{extreme ? "Confirmed 85/15 reversal simulation with no real money" : jdub ? "New York opening-range simulation with no real money" : "Automatic whole-market simulation · configurable timeframe"}</span>
           </div>
+          <span className="paper-timeframe-badge">Timeframe {engine ? formatTimeframe(engine.timeframe) : "--"}</span>
         </div>
         <div className="paper-actions">
+          <button className="icon-text dashboard-return" type="button" onClick={onBackToDashboard}>
+            <ArrowUp size={14} />
+            Dashboard
+          </button>
           <label className="paper-toggle">
             <input
               type="checkbox"
@@ -130,7 +138,7 @@ export function PaperTradingPanel({
               <div className="paper-subheading">
                 <div>
                   <strong>Simulation rules</strong>
-                  <span>{extreme ? "Applied only after RSI(1), MACD, and MA confirmation" : jdub ? "15m New York range, 5m close, then 1m trigger" : "Applied to every eligible directional signal"}</span>
+                  <span>{extreme ? "Applied only after RSI(1), MACD, and MA confirmation" : jdub ? "15m New York range, 5m close, then 1m trigger" : "Applied to every eligible directional signal on the selected timeframe"}</span>
                 </div>
               </div>
               <dl>

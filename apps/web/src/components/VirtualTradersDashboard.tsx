@@ -108,7 +108,7 @@ export function VirtualTradersDashboard({
       <div className="dashboard-trader-grid">
         <TraderCard
           name="Market Scanner"
-          subtitle="Whole-market virtual execution"
+          subtitle="Whole-market virtual execution · configurable timeframe"
           accent="market"
           icon={<BarChart3 size={17} />}
           panelId="paper-trading"
