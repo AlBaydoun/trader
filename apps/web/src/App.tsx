@@ -9,6 +9,7 @@ import { PaperTradingPanel } from "./components/PaperTradingPanel";
 import { SignalRail } from "./components/SignalRail";
 import { StrategyLabPanel } from "./components/StrategyLabPanel";
 import { SymbolDrawer } from "./components/SymbolDrawer";
+import { VirtualTradersDashboard } from "./components/VirtualTradersDashboard";
 import { WorkspaceHeader } from "./components/WorkspaceHeader";
 import {
   getAccounts,
@@ -551,8 +552,8 @@ export function App() {
     }
   }
 
-  function openPaperPanel() {
-    const panel = document.getElementById("paper-trading");
+  function scrollToPanel(panelId: string) {
+    const panel = document.getElementById(panelId);
     const header = document.querySelector<HTMLElement>(".workspace-header");
     if (!panel) return;
     const headerHeight = header?.getBoundingClientRect().height ?? 0;
@@ -560,6 +561,10 @@ export function App() {
       top: Math.max(0, panel.offsetTop - headerHeight - 8),
       behavior: "smooth"
     });
+  }
+
+  function openPaperPanel() {
+    scrollToPanel("paper-trading");
   }
 
   function moveSymbolByOffset(symbol: string, offset: number) {
@@ -583,14 +588,7 @@ export function App() {
   }
 
   function openExtremePanel() {
-    const panel = document.getElementById("extreme-alerts");
-    const header = document.querySelector<HTMLElement>(".workspace-header");
-    if (!panel) return;
-    const headerHeight = header?.getBoundingClientRect().height ?? 0;
-    window.scrollTo({
-      top: Math.max(0, panel.offsetTop - headerHeight - 8),
-      behavior: "smooth"
-    });
+    scrollToPanel("extreme-alerts");
   }
 
   return (
@@ -627,6 +625,14 @@ export function App() {
         onRefresh={() => void refresh()}
         onOpenPaper={openPaperPanel}
         onOpenExtreme={openExtremePanel}
+      />
+
+      <VirtualTradersDashboard
+        paper={paperPortfolio}
+        jdub={jdubPaperPortfolio}
+        extreme={extremePaperPortfolio}
+        strategyLab={strategyLab}
+        onOpenPanel={scrollToPanel}
       />
 
       <div className="workstation">
