@@ -355,10 +355,11 @@ function OpenTrades({ trades, onClose, busy, extreme }: { trades: PaperTrade[]; 
   return (
     <div className="paper-table-wrap">
       <table className="paper-table">
-        <thead><tr><th>Market</th><th>{extreme ? "Signal entry / now" : "Entry / current"}</th><th>Stop / target</th><th>Virtual size</th><th>Result</th><th>Signal</th><th>{extreme ? "Since signal" : "Opened"}</th><th /></tr></thead>
+        <thead><tr><th>Market</th><th>Timeframe</th><th>{extreme ? "Signal entry / now" : "Entry / current"}</th><th>Stop / target</th><th>Virtual size</th><th>Result</th><th>Signal</th><th>{extreme ? "Since signal" : "Opened"}</th><th /></tr></thead>
         <tbody>{trades.map((trade) => (
           <tr key={trade.id}>
             <td><strong>{trade.symbol}</strong><span className={`side ${trade.direction}`}>{trade.direction}</span></td>
+            <td title={`Executed on ${trade.timeframe}`}><strong>{formatTimeframe(trade.timeframe)}</strong><span>Entry execution</span></td>
             <td>{price(extreme ? trade.signal_price ?? trade.entry_price : trade.entry_price)}<span>{extreme ? `Fill ${price(trade.entry_price)}` : price(trade.current_price)}</span>{extreme && <small>Now {price(trade.current_price)}</small>}</td>
             <td>{price(trade.stop_loss)}<span>{price(trade.take_profit)}</span></td>
             <td>{trade.quantity.toPrecision(5)}<span>{money(trade.risk_amount)} risk</span></td>
@@ -378,10 +379,11 @@ function TradeHistory({ trades, extreme }: { trades: PaperTrade[]; extreme: bool
   return (
     <div className="paper-table-wrap">
       <table className="paper-table history-table">
-        <thead><tr><th>Market</th><th>{extreme ? "Signal / fill / exit" : "Entry / exit"}</th><th>Net result</th><th>Excursion</th><th>Costs</th><th>Exit</th><th>Duration</th></tr></thead>
+        <thead><tr><th>Market</th><th>Timeframe</th><th>{extreme ? "Signal / fill / exit" : "Entry / exit"}</th><th>Net result</th><th>Excursion</th><th>Costs</th><th>Exit</th><th>Duration</th></tr></thead>
         <tbody>{trades.map((trade) => (
           <tr key={trade.id}>
             <td><strong>{trade.symbol}</strong><span className={`side ${trade.direction}`}>{trade.direction}</span></td>
+            <td title={`Executed on ${trade.timeframe}`}><strong>{formatTimeframe(trade.timeframe)}</strong><span>Entry execution</span></td>
             <td>{extreme && trade.signal_level ? levelLabel(trade.signal_level) : price(trade.entry_price)}<span>{extreme ? `${price(trade.signal_price ?? trade.entry_price)} fill ${price(trade.entry_price)}` : price(trade.exit_price)}</span>{extreme && <small>Exit {price(trade.exit_price)}</small>}</td>
             <td className={pnlClass(trade.net_pnl)}><strong>{signedMoney(trade.net_pnl)}</strong><span>{trade.r_multiple.toFixed(2)}R / {trade.return_pct.toFixed(3)}%</span></td>
             <td>{signedMoney(trade.max_favorable_excursion)}<span>{signedMoney(trade.max_adverse_excursion)}</span></td>
@@ -495,4 +497,15 @@ function duration(start: string, end: string | null) { if (!end) return age(star
 function exitLabel(reason: PaperTrade["exit_reason"]) { return reason ? reason.replaceAll("_", " ") : "--"; }
 function signalTime(trade: PaperTrade) { return trade.signal_at ?? trade.opened_at; }
 function levelLabel(level: string) { return level === "upper_85" ? "85.00 / sell" : level === "lower_15" ? "15.00 / buy" : level; }
+function formatTimeframe(value: string) {
+  const labels: Record<string, string> = {
+    "1m": "1m (M1)",
+    "5m": "5m (M5)",
+    "15m": "15m (M15)",
+    "1h": "1h (H1)",
+    "4h": "4h (H4)",
+    "1d": "1d (D1)"
+  };
+  return labels[value] ?? value;
+}
 function reportDate(value: string) { return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`)); }
