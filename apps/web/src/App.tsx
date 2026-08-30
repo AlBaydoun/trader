@@ -39,6 +39,7 @@ import {
   updatePaperControl
 } from "./lib/api";
 import { playExtremeAlert, playSignalTone, speakExtremeAlert, speakSignal } from "./lib/alerts";
+import { DEFAULT_INDICATORS, INDICATOR_CATALOG, type ActiveIndicator } from "./lib/indicators";
 import type {
   AccountList,
   Backtest,
@@ -68,6 +69,7 @@ export function App() {
   const [mt5Quotes, setMT5Quotes] = useState<MT5Quote[]>([]);
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>(loadSelectedSymbols);
   const [chartHeights, setChartHeights] = useState<Record<string, number>>(loadChartHeights);
+  const [chartIndicators, setChartIndicators] = useState<Record<string, ActiveIndicator[]>>(loadChartIndicators);
   const [timeframe, setTimeframe] = useState("1m");
   const [candles, setCandles] = useState<Record<string, Candle[]>>({});
   const [signals, setSignals] = useState<Record<string, Signal>>({});
@@ -135,6 +137,10 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem("trader:chart-heights", JSON.stringify(chartHeights));
   }, [chartHeights]);
+
+  useEffect(() => {
+    window.localStorage.setItem("trader:chart-indicators", JSON.stringify(chartIndicators));
+  }, [chartIndicators]);
 
   useEffect(() => {
     getStrategy().then(setStrategy).catch(() => setStrategy(undefined));
@@ -564,8 +570,10 @@ export function App() {
               timeframe={timeframe}
               candles={candles[symbol] ?? []}
               signal={signals[symbol]}
+              indicators={chartIndicators[symbol] ?? DEFAULT_INDICATORS}
               focused={activeSymbol === symbol}
               onFocus={setActiveSymbol}
+              onIndicatorsChange={(indicators) => setChartIndicators((current) => ({ ...current, [symbol]: indicators }))}
               onMove={moveSymbol}
               onMoveByOffset={moveSymbolByOffset}
               height={chartHeights[symbol]}
@@ -662,6 +670,29 @@ function loadChartHeights(): Record<string, number> {
       Object.entries(parsed).flatMap(([symbol, value]) => {
         if (typeof value !== "number" || !Number.isFinite(value)) return [];
         return [[symbol, Math.max(CHART_HEIGHT_MIN, Math.min(CHART_HEIGHT_MAX, Math.round(value)))]];
+      })
+    );
+  } catch {
+    return {};
+  }
+}
+
+function loadChartIndicators(): Record<string, ActiveIndicator[]> {
+  try {
+    const stored = window.localStorage.getItem("trader:chart-indicators");
+    if (!stored) return {};
+    const parsed: unknown = JSON.parse(stored);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const validKinds = new Set(INDICATOR_CATALOG.map((indicator) => indicator.kind));
+    return Object.fromEntries(
+      Object.entries(parsed).flatMap(([symbol, value]) => {
+        if (!Array.isArray(value)) return [];
+        const indicators = value.filter((item): item is ActiveIndicator => {
+          if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+          const candidate = item as { kind?: unknown };
+          return typeof candidate.kind === "string" && validKinds.has(candidate.kind as ActiveIndicator["kind"]);
+        });
+        return indicators.length ? [[symbol, indicators]] : [];
       })
     );
   } catch {

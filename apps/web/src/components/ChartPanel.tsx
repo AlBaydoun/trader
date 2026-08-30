@@ -9,6 +9,7 @@ import {
   type PointerEvent
 } from "react";
 import type { Candle, Signal } from "../types";
+import { getOverlayLines, type ActiveIndicator, type IndicatorLine } from "../lib/indicators";
 import { IndicatorStack } from "./IndicatorStack";
 
 interface ChartPanelProps {
@@ -16,8 +17,10 @@ interface ChartPanelProps {
   timeframe: string;
   candles: Candle[];
   signal?: Signal;
+  indicators: ActiveIndicator[];
   focused: boolean;
   onFocus: (symbol: string) => void;
+  onIndicatorsChange: (indicators: ActiveIndicator[]) => void;
   onMove: (source: string, target: string) => void;
   onMoveByOffset: (symbol: string, offset: number) => void;
   height?: number;
@@ -42,8 +45,10 @@ export function ChartPanel({
   timeframe,
   candles,
   signal,
+  indicators,
   focused,
   onFocus,
+  onIndicatorsChange,
   onMove,
   onMoveByOffset,
   height,
@@ -66,6 +71,7 @@ export function ChartPanel({
     () => candles.slice(-Math.min(visibleCount, candles.length)),
     [candles, visibleCount]
   );
+  const overlayLines = useMemo(() => getOverlayLines(visibleCandles, indicators), [indicators, visibleCandles]);
   const hoveredCandle = hovered ? visibleCandles[hovered.index] : undefined;
   const source = candles.at(-1)?.source ?? "demo";
 
@@ -84,13 +90,13 @@ export function ChartPanel({
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
-      drawChart(ctx, rect.width, rect.height, visibleCandles, signal, hovered?.index);
+      drawChart(ctx, rect.width, rect.height, visibleCandles, signal, hovered?.index, overlayLines);
     };
     render();
     const observer = new ResizeObserver(render);
     observer.observe(canvas);
     return () => observer.disconnect();
-  }, [hovered?.index, signal, visibleCandles]);
+  }, [hovered?.index, overlayLines, signal, visibleCandles]);
 
   function zoomIn() {
     setVisibleCount((current) => Math.max(MIN_VISIBLE_CANDLES, current - ZOOM_STEP));
@@ -282,7 +288,7 @@ export function ChartPanel({
       canvas.style.height = `${height}px`;
       if (!ctx) return;
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
-      drawChart(ctx, width, height, visibleCandles, signal);
+      drawChart(ctx, width, height, visibleCandles, signal, undefined, overlayLines);
     };
     render();
     popout.addEventListener("resize", render);
@@ -381,7 +387,14 @@ export function ChartPanel({
         <span>{visibleCandles.length} candles visible</span>
         <span>{signal ? `${Math.round(signal.confidence * 100)}% confidence` : "waiting"}</span>
       </footer>
-      <IndicatorStack candles={candles} signal={signal} />
+      <IndicatorStack
+        symbol={symbol}
+        timeframe={timeframe}
+        candles={candles}
+        signal={signal}
+        indicators={indicators}
+        onChange={onIndicatorsChange}
+      />
       <button
         className={`chart-resize-handle ${isResizing ? "active" : ""}`}
         type="button"
@@ -415,7 +428,8 @@ function drawChart(
   height: number,
   candles: Candle[],
   signal?: Signal,
-  hoveredIndex?: number
+  hoveredIndex?: number,
+  overlayLines: IndicatorLine[] = []
 ) {
   ctx.clearRect(0, 0, width, height);
   const padding = { top: 18, right: 54, bottom: 30, left: 14 };
@@ -458,6 +472,8 @@ function drawChart(
     ctx.fillRect(x - candleWidth / 2, Math.min(openY, closeY), candleWidth, bodyHeight);
   });
 
+  overlayLines.forEach((line) => drawIndicatorLine(ctx, line, padding.left, chartWidth, padding.top, chartHeight, min, range, xStep));
+
   if (hoveredIndex !== undefined) {
     const x = padding.left + hoveredIndex * xStep;
     ctx.strokeStyle = "#91a0ac";
@@ -478,6 +494,46 @@ function drawChart(
   ctx.fillText(max.toFixed(2), width - 48, padding.top + 4);
   ctx.fillText(min.toFixed(2), width - 48, height - padding.bottom);
   drawTimeAxis(ctx, candles, padding.left, chartWidth, height - 8);
+}
+
+function drawIndicatorLine(
+  ctx: CanvasRenderingContext2D,
+  line: IndicatorLine,
+  left: number,
+  width: number,
+  top: number,
+  height: number,
+  min: number,
+  range: number,
+  xStep: number
+) {
+  ctx.save();
+  ctx.strokeStyle = line.color;
+  ctx.lineWidth = 1.35;
+  if (line.dashed) ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  let drawing = false;
+  line.values.forEach((value, index) => {
+    if (!Number.isFinite(value)) {
+      drawing = false;
+      return;
+    }
+    const x = left + index * xStep;
+    const y = priceToY(value, min, range, top, height);
+    if (!drawing) {
+      ctx.moveTo(x, y);
+      drawing = true;
+    } else {
+      ctx.lineTo(x, y);
+    }
+  });
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = line.color;
+  ctx.font = "9px Inter, Arial";
+  const last = [...line.values].reverse().find((value) => Number.isFinite(value));
+  if (last !== undefined) ctx.fillText(line.label, left + width - 44, priceToY(last, min, range, top, height) - 3);
+  ctx.restore();
 }
 
 function drawTimeAxis(

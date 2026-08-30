@@ -31,6 +31,8 @@ This project is **not** a profit guarantee and does not ship with live trading e
   ADX trend confirmation on M5 through D1.
 - Standalone research-based MT5 Strategy Tester EA using breakout, trend, momentum, ATR risk,
   walk-forward-friendly optimization scoring, and live-order locks.
+- Per-chart indicator workspace with selectable overlays, oscillator readings, configurable
+  parameters, presets, saved layouts, and an explainable AI-assisted bias summary.
 - Searchable left market drawer for adding, removing, and drag-ordering charts, plus direct chart
   move handles, with local persistence.
 - Chart zoom controls and candle inspection with exact start/end time, OHLC, and volume.
@@ -120,6 +122,7 @@ BROKER_ADAPTER=paper
 - [Virtual Paper Trading](docs/paper-trading.md)
 - [85/15 Extreme Scanner](docs/extreme-scanner.md)
 - [Research Strategy Tester EA](docs/research-trend-strategy.md)
+- [Chart Indicators and AI Reading](docs/chart-indicators.md)
 - [Operations Runbook](docs/operations.md)
 
 ## Repository Layout

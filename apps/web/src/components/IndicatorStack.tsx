@@ -1,180 +1,265 @@
-import { Activity, BarChart3, Gauge, Layers3, TrendingUp } from "lucide-react";
-import { useMemo } from "react";
+import { Activity, BarChart3, BrainCircuit, Gauge, Layers3, Plus, Settings2, Sparkles, TrendingUp, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import type { Candle, Signal } from "../types";
+import {
+  buildAIIndicatorReading,
+  buildIndicatorReadings,
+  createIndicator,
+  INDICATOR_CATALOG,
+  INDICATOR_PRESETS,
+  indicatorDefinition,
+  indicatorKey,
+  type ActiveIndicator,
+  type IndicatorKind,
+  type IndicatorReading
+} from "../lib/indicators";
 
 interface IndicatorStackProps {
+  symbol: string;
+  timeframe: string;
   candles: Candle[];
   signal?: Signal;
+  indicators: ActiveIndicator[];
+  onChange: (indicators: ActiveIndicator[]) => void;
 }
 
-interface IndicatorReading {
-  name: string;
-  parameters: string;
-  value: string;
-  status: string;
-  tone: "positive" | "negative" | "neutral" | "warning";
-  gauge?: number;
-  detail: string;
-}
+export function IndicatorStack({ symbol, timeframe, candles, signal, indicators, onChange }: IndicatorStackProps) {
+  const [selectedKind, setSelectedKind] = useState<IndicatorKind | "">("");
+  const [selectedPreset, setSelectedPreset] = useState("");
+  const readings = useMemo(() => buildIndicatorReadings(candles, signal, indicators), [candles, indicators, signal]);
+  const aiReading = useMemo(() => buildAIIndicatorReading(readings), [readings]);
+  const overlayCount = indicators.filter((indicator) => indicatorDefinition(indicator.kind).overlay).length;
 
-export function IndicatorStack({ candles, signal }: IndicatorStackProps) {
-  const readings = useMemo(() => buildReadings(candles, signal), [candles, signal]);
+  function addSelectedIndicator() {
+    if (!selectedKind) return;
+    const next = createIndicator(selectedKind);
+    if (indicators.some((indicator) => indicatorKey(indicator) === indicatorKey(next))) return;
+    onChange([...indicators, next]);
+    setSelectedKind("");
+  }
+
+  function removeIndicator(target: ActiveIndicator) {
+    onChange(indicators.filter((indicator) => indicatorKey(indicator) !== indicatorKey(target)));
+  }
+
+  function updateIndicator(target: ActiveIndicator, update: Partial<ActiveIndicator>) {
+    const next = { ...target, ...update };
+    if (indicators.some((indicator) => indicator !== target && indicatorKey(indicator) === indicatorKey(next))) return;
+    onChange(indicators.map((indicator) => indicator === target ? next : indicator));
+  }
+
+  function loadPreset() {
+    if (!selectedPreset) return;
+    onChange(INDICATOR_PRESETS[selectedPreset].map((indicator) => ({ ...indicator })));
+    setSelectedPreset("");
+  }
 
   return (
     <details className="indicator-stack" open>
       <summary>
         <span className="indicator-stack-title">
           <Layers3 size={15} />
-          <strong>Advanced indicators</strong>
+          <strong>Indicators & AI reading</strong>
         </span>
-        <span className="indicator-stack-summary">RSI 1 · MACD 5/6/1 · EMA 12/36 · ATR 15</span>
+        <span className="indicator-stack-summary">
+          {indicators.length} active · {overlayCount} on chart · {symbol} {timeframe}
+        </span>
       </summary>
+
+      <div className="indicator-toolbar">
+        <div className="indicator-toolbar-field">
+          <label htmlFor={`indicator-add-${symbol}`}>Add indicator</label>
+          <select
+            id={`indicator-add-${symbol}`}
+            value={selectedKind}
+            onChange={(event) => setSelectedKind(event.target.value as IndicatorKind | "")}
+          >
+            <option value="">Choose an indicator</option>
+            {INDICATOR_CATALOG.map((definition) => (
+              <option value={definition.kind} key={definition.kind}>
+                {definition.label} · {definition.group}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          className="icon-button indicator-add-button"
+          type="button"
+          title="Add selected indicator"
+          aria-label="Add selected indicator"
+          disabled={!selectedKind}
+          onClick={addSelectedIndicator}
+        >
+          <Plus size={15} />
+        </button>
+        <div className="indicator-toolbar-field preset-field">
+          <label htmlFor={`indicator-preset-${symbol}`}>Preset</label>
+          <select
+            id={`indicator-preset-${symbol}`}
+            value={selectedPreset}
+            onChange={(event) => setSelectedPreset(event.target.value)}
+          >
+            <option value="">Load a set</option>
+            {Object.keys(INDICATOR_PRESETS).map((preset) => <option value={preset} key={preset}>{preset}</option>)}
+          </select>
+        </div>
+        <button
+          className="text-button indicator-load-button"
+          type="button"
+          disabled={!selectedPreset}
+          onClick={loadPreset}
+        >
+          Load
+        </button>
+      </div>
+
+      <div className="indicator-chip-row" aria-label={`${symbol} active indicators`}>
+        {indicators.length ? indicators.map((indicator) => (
+          <span className={`indicator-chip ${indicatorDefinition(indicator.kind).overlay ? "overlay" : "pane"}`} key={indicatorKey(indicator)}>
+            <span>{indicatorDefinition(indicator.kind).label}</span>
+            <small>{indicatorParameters(indicator)}</small>
+            <button
+              type="button"
+              title={`Remove ${indicatorDefinition(indicator.kind).label}`}
+              aria-label={`Remove ${indicatorDefinition(indicator.kind).label}`}
+              onClick={() => removeIndicator(indicator)}
+            >
+              <X size={12} />
+            </button>
+          </span>
+        )) : <span className="muted">No indicators selected. Add one to start the AI reading.</span>}
+      </div>
+
+      <div className={`indicator-ai-reading ${aiReading.tone}`}>
+        <div className="indicator-ai-heading">
+          <span className="indicator-ai-title"><Sparkles size={14} /><strong>AI-assisted reading</strong></span>
+          <span className={`indicator-ai-bias ${aiReading.tone}`}>
+            <BrainCircuit size={13} /> {aiReading.direction}
+          </span>
+        </div>
+        <p>{aiReading.summary}</p>
+        <div className="indicator-ai-meta">
+          <span>Agreement {aiReading.alignment}%</span>
+          <span>Closed-candle context</span>
+        </div>
+        <div className="indicator-ai-reasons">
+          {aiReading.reasons.map((reason) => <span key={reason}>{reason}</span>)}
+        </div>
+        <div className="indicator-ai-watch"><strong>Watch:</strong> {aiReading.watch}</div>
+      </div>
+
       <div className="indicator-readings">
         {readings.map((reading) => (
-          <article className="indicator-reading" key={reading.name}>
-            <div className="indicator-reading-heading">
-              <span className="indicator-reading-name">
-                {indicatorIcon(reading.name)}
-                <strong>{reading.name}</strong>
-              </span>
-              <span>{reading.parameters}</span>
-            </div>
-            {reading.gauge !== undefined && (
-              <div className="indicator-gauge" aria-hidden="true">
-                <i style={{ width: `${Math.max(2, Math.min(100, reading.gauge))}%` }} />
-                {reading.name === "RSI" && <><b className="gauge-line upper" /><b className="gauge-line lower" /></>}
-              </div>
-            )}
-            <div className="indicator-reading-result">
-              <strong className={reading.tone}>{reading.value}</strong>
-              <span className={reading.tone}>{reading.status}</span>
-            </div>
-            <p>{reading.detail}</p>
-          </article>
+          <IndicatorReadingCard
+            key={`${reading.name}-${reading.parameters}`}
+            reading={reading}
+            indicator={indicators.find((item) => indicatorKey(item) === reading.key)}
+            onChange={updateIndicator}
+          />
         ))}
       </div>
       <div className="indicator-disclaimer">
         <Activity size={13} />
-        <span>These readings describe current market conditions; they are not a profit guarantee.</span>
+        <span>AI summarizes selected technical readings. It does not predict certainty or guarantee a profitable trade.</span>
       </div>
     </details>
   );
 }
 
-function buildReadings(candles: Candle[], signal?: Signal): IndicatorReading[] {
-  if (candles.length < 3) return [waitingReading("Waiting for enough candle data.")];
-  const closes = candles.map((candle) => candle.close);
-  const current = closes.at(-1) ?? 0;
-  const previous = closes.at(-2) ?? current;
-  const fastEma = ema(closes, 12);
-  const slowEma = ema(closes, 36);
-  const macdFast = ema(closes, 5);
-  const macdSlow = ema(closes, 6);
-  const macd = macdFast - macdSlow;
-  const previousMacd = ema(closes.slice(0, -1), 5) - ema(closes.slice(0, -1), 6);
-  const macdSignal = macd;
-  const macdHistogram = macd - macdSignal;
-  const rsi = previous === current ? 50 : current > previous ? 100 : 0;
-  const atr = averageTrueRange(candles.slice(-15));
-  const rangeHigh = Math.max(...candles.slice(-25, -1).map((candle) => candle.high));
-  const rangeLow = Math.min(...candles.slice(-25, -1).map((candle) => candle.low));
-  const structure = current > rangeHigh ? "Breakout above range" : current < rangeLow ? "Breakdown below range" : "Inside recent range";
-  const trendUp = fastEma > slowEma;
-  const momentumUp = macd > previousMacd;
-  const volatilityPct = current ? (atr / current) * 100 : 0;
-
-  return [
-    {
-      name: "RSI",
-      parameters: "period 1",
-      value: rsi.toFixed(2),
-      status: rsi >= 85 ? "Upper extreme 85" : rsi <= 15 ? "Lower extreme 15" : "Neutral zone",
-      tone: rsi >= 85 ? "negative" : rsi <= 15 ? "positive" : "neutral",
-      gauge: rsi,
-      detail: "Fast momentum reading used for the separate 85/15 alert scanner."
-    },
-    {
-      name: "MACD",
-      parameters: "5 / 6 / 1",
-      value: formatCompact(macd),
-      status: momentumUp ? "Momentum rising" : "Momentum fading",
-      tone: macd >= 0 ? "positive" : "negative",
-      detail: `Histogram ${formatCompact(macdHistogram)} · signal ${formatCompact(macdSignal)}.`
-    },
-    {
-      name: "EMA",
-      parameters: "12 / 36",
-      value: trendUp ? "Bullish" : "Bearish",
-      status: `${formatPrice(fastEma)} / ${formatPrice(slowEma)}`,
-      tone: trendUp ? "positive" : "negative",
-      detail: "Fast and slow exponential averages show the active trend alignment."
-    },
-    {
-      name: "ATR",
-      parameters: "period 15",
-      value: formatPrice(atr),
-      status: volatilityPct >= 1.8 ? "Elevated volatility" : "Normal volatility",
-      tone: volatilityPct >= 1.8 ? "warning" : "neutral",
-      detail: `${volatilityPct.toFixed(2)}% of current price · used to size stops and targets.`
-    },
-    {
-      name: "Structure",
-      parameters: "24 candles",
-      value: structure,
-      status: signal ? `${signal.direction} signal · ${Math.round(signal.confidence * 100)}%` : "Signal waiting",
-      tone: structure.includes("above") ? "positive" : structure.includes("below") ? "negative" : "neutral",
-      detail: `Range ${formatPrice(rangeLow)} – ${formatPrice(rangeHigh)}.`
-    }
-  ];
-}
-
-function waitingReading(detail: string): IndicatorReading {
-  return {
-    name: "Indicator stack",
-    parameters: "loading",
-    value: "--",
-    status: "Waiting",
-    tone: "neutral",
-    detail
-  };
-}
-
-function indicatorIcon(name: string) {
-  if (name === "RSI") return <Gauge size={13} />;
-  if (name === "MACD") return <BarChart3 size={13} />;
-  return <TrendingUp size={13} />;
-}
-
-function ema(values: number[], period: number): number {
-  if (!values.length) return 0;
-  const seed = values.slice(0, period).reduce((sum, value) => sum + value, 0) / Math.min(period, values.length);
-  const multiplier = 2 / (period + 1);
-  return values.slice(Math.min(period, values.length)).reduce(
-    (current, value) => (value - current) * multiplier + current,
-    seed
+function IndicatorReadingCard({
+  reading,
+  indicator,
+  onChange
+}: {
+  reading: IndicatorReading;
+  indicator?: ActiveIndicator;
+  onChange: (target: ActiveIndicator, update: Partial<ActiveIndicator>) => void;
+}) {
+  return (
+    <article className="indicator-reading">
+      <div className="indicator-reading-heading">
+        <span className="indicator-reading-name">
+          {indicatorIcon(reading.name)}
+          <strong>{reading.name}</strong>
+        </span>
+        <span className="indicator-reading-tools">
+          <span>{reading.parameters}</span>
+          {indicator && <IndicatorSettings indicator={indicator} onChange={(update) => onChange(indicator, update)} />}
+        </span>
+      </div>
+      {reading.gauge !== undefined && (
+        <div className="indicator-gauge" aria-hidden="true">
+          <i style={{ width: `${Math.max(2, Math.min(100, reading.gauge))}%` }} />
+          {(reading.name === "RSI" || reading.name === "Stochastic") && <><b className="gauge-line upper" /><b className="gauge-line lower" /></>}
+        </div>
+      )}
+      <div className="indicator-reading-result">
+        <strong className={reading.tone}>{reading.value}</strong>
+        <span className={reading.tone}>{reading.status}</span>
+      </div>
+      <p>{reading.detail}</p>
+    </article>
   );
 }
 
-function averageTrueRange(candles: Candle[]): number {
-  if (candles.length < 2) return 0;
-  const ranges = candles.slice(1).map((candle, index) => {
-    const previousClose = candles[index].close;
-    return Math.max(
-      candle.high - candle.low,
-      Math.abs(candle.high - previousClose),
-      Math.abs(candle.low - previousClose)
-    );
-  });
-  return ranges.reduce((sum, value) => sum + value, 0) / ranges.length;
+function IndicatorSettings({ indicator, onChange }: { indicator: ActiveIndicator; onChange: (update: Partial<ActiveIndicator>) => void }) {
+  return (
+    <details className="indicator-settings">
+      <summary title="Adjust indicator parameters" aria-label="Adjust indicator parameters"><Settings2 size={12} /></summary>
+      <div className="indicator-settings-popover">
+        {indicator.kind === "macd" ? (
+          <>
+            <ParameterInput label="Fast" value={indicator.fast ?? 12} onChange={(fast) => onChange({ fast })} />
+            <ParameterInput label="Slow" value={indicator.slow ?? 26} onChange={(slow) => onChange({ slow })} />
+            <ParameterInput label="Signal" value={indicator.signal ?? 9} onChange={(signal) => onChange({ signal })} />
+          </>
+        ) : indicator.kind === "ichimoku" ? (
+          <>
+            <ParameterInput label="Conv" value={indicator.conversion ?? 9} onChange={(conversion) => onChange({ conversion })} />
+            <ParameterInput label="Base" value={indicator.base ?? 26} onChange={(base) => onChange({ base })} />
+            <ParameterInput label="Span" value={indicator.span ?? 52} onChange={(span) => onChange({ span })} />
+          </>
+        ) : (
+          <ParameterInput label="Period" value={indicator.period ?? 14} onChange={(period) => onChange({ period })} />
+        )}
+        {indicator.kind === "bollinger" && (
+          <ParameterInput label="Std dev" step={0.1} value={indicator.deviation ?? 2} onChange={(deviation) => onChange({ deviation })} />
+        )}
+        {indicator.kind === "stochastic" && (
+          <ParameterInput label="Smooth" value={indicator.signal ?? 3} onChange={(signal) => onChange({ signal })} />
+        )}
+      </div>
+    </details>
+  );
 }
 
-function formatCompact(value: number): string {
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(2)}k`;
-  if (Math.abs(value) < 0.01) return value.toFixed(5);
-  return value.toFixed(3);
+function ParameterInput({ label, value, step = 1, onChange }: { label: string; value: number; step?: number; onChange: (value: number) => void }) {
+  return (
+    <label>
+      <span>{label}</span>
+      <input
+        type="number"
+        min={step < 1 ? 0.5 : 2}
+        max={250}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value) || 2)}
+      />
+    </label>
+  );
 }
 
-function formatPrice(value: number): string {
-  if (!Number.isFinite(value)) return "--";
-  return value >= 10000 ? value.toFixed(1) : value < 10 ? value.toFixed(4) : value.toFixed(2);
+function indicatorParameters(indicator: ActiveIndicator): string {
+  if (indicator.kind === "macd") return `${indicator.fast ?? 12}/${indicator.slow ?? 26}/${indicator.signal ?? 9}`;
+  if (indicator.kind === "ichimoku") return `${indicator.conversion ?? 9}/${indicator.base ?? 26}/${indicator.span ?? 52}`;
+  if (indicator.kind === "bollinger") return `${indicator.period ?? 20}/${indicator.deviation ?? 2}`;
+  if (indicator.kind === "vwap") return "session";
+  return `${indicator.period ?? 14}`;
+}
+
+function indicatorIcon(name: string) {
+  if (name === "RSI" || name === "Stochastic") return <Gauge size={13} />;
+  if (name === "MACD") return <BarChart3 size={13} />;
+  if (name === "ATR" || name === "Bollinger Bands") return <Activity size={13} />;
+  return <TrendingUp size={13} />;
 }
