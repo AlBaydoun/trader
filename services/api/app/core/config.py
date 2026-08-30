@@ -24,6 +24,8 @@ class Settings(BaseSettings):
 
     paper_auto_enabled: bool = True
     paper_state_file: str = "../../data/paper-regime-trading.json"
+    paper_timeframe_mode: str = Field(default="auto", pattern="^(auto|manual)$")
+    paper_timeframes: str = "1m,5m,15m,1h,4h,1d"
     paper_starting_balance: float = Field(default=10000.0, gt=0)
     paper_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
     paper_max_open_positions: int = Field(default=3, ge=1, le=200)
@@ -81,6 +83,10 @@ class Settings(BaseSettings):
     mt5_accounts_file: str = ""
     mt5_read_only_enabled: bool = True
     mt5_timeout_ms: int = Field(default=10000, ge=1000, le=60000)
+
+    @property
+    def paper_timeframe_options(self) -> list[str]:
+        return [item.strip() for item in self.paper_timeframes.split(",") if item.strip()]
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../../.env"),

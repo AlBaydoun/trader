@@ -51,7 +51,7 @@ from app.services.extreme_paper_trading import ExtremePaperTradingService
 from app.services.extreme_scanner import ExtremeScanResult, ExtremeSignalScanner
 from app.services.jdub_traders import JdubTradersService
 from app.services.market_data import MarketDataService
-from app.services.market_scanner import MarketOpportunityScanner
+from app.services.market_scanner import MarketOpportunityScanner, MarketScanResult
 from app.services.mt5_bridge import MT5ConnectionSnapshot, MT5ReadOnlyBridge
 from app.services.news import NewsService
 from app.services.paper_trading import PaperPortfolio, PaperTradingService
@@ -59,6 +59,7 @@ from app.services.risk import RiskEngine
 from app.services.scanner import ScannerService
 from app.services.strategy import SignalEngine
 from app.services.strategy_lab import STRATEGY_PROFILES, ScalpStrategyLabService, StrategyLabMember
+from app.services.timeframe_selector import choose_best_scan
 
 settings = get_settings()
 market_data = MarketDataService()
@@ -112,6 +113,7 @@ paper_trader = PaperTradingService(
     max_position_minutes=settings.paper_max_position_minutes,
     adaptive_learning_enabled=settings.paper_adaptive_learning_enabled,
     learning_min_samples=settings.paper_learning_min_samples,
+    timeframe_mode="auto" if settings.paper_timeframe_mode == "auto" else "manual",
 )
 jdub_trader = JdubTradersService(
     PaperTradingService(
@@ -238,16 +240,43 @@ def broker() -> PaperTradingService | MT5Broker:
     return paper_trader
 
 
+PAPER_TIMEFRAME_OPTIONS = ("1m", "5m", "15m", "1h", "4h", "1d")
+
+
+def scan_paper_timeframes(
+    account: BrokerAccountProfile | None,
+    force: bool,
+) -> MarketScanResult:
+    if paper_trader.timeframe_mode == "manual":
+        timeframes = [paper_trader.timeframe]
+        scan_force = force
+    else:
+        timeframes = [
+            timeframe
+            for timeframe in settings.paper_timeframe_options
+            if timeframe in PAPER_TIMEFRAME_OPTIONS
+        ] or [paper_trader.timeframe]
+        # Automatic selection needs fresh comparisons on every paper cycle. The scanner still
+        # protects concurrent calls, while this bypasses its five-minute per-timeframe cache.
+        scan_force = True
+
+    scans = [
+        market_scanner.scan(
+            account,
+            timeframe,
+            settings.market_scan_max_symbols,
+            settings.market_scan_max_symbols,
+            scan_force,
+        )
+        for timeframe in timeframes
+    ]
+    return choose_best_scan(scans)
+
+
 def run_paper_cycle(force: bool = False) -> PaperPortfolio:
     with paper_cycle_lock:
         account = account_registry.active_account()
-        result = market_scanner.scan(
-            account,
-            paper_trader.timeframe,
-            settings.market_scan_max_symbols,
-            settings.market_scan_max_symbols,
-            force,
-        )
+        result = scan_paper_timeframes(account, force)
         if result.source != "mt5":
             paper_trader.record_error(
                 "The virtual cycle was skipped because verified MT5 market data is unavailable."
@@ -258,7 +287,7 @@ def run_paper_cycle(force: bool = False) -> PaperPortfolio:
             candles = mt5_bridge.candles(
                 account,
                 position.symbol,
-                paper_trader.timeframe,
+                result.timeframe,
                 80,
             )
             if candles:
@@ -577,6 +606,7 @@ def control_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
     portfolio = paper_trader.update_control(
         enabled=payload.enabled,
         timeframe=payload.timeframe,
+        timeframe_mode=payload.timeframe_mode,
         minimum_opportunity_score=payload.minimum_opportunity_score,
         max_open_positions=payload.max_open_positions,
     )

@@ -13,6 +13,7 @@ from app.domain.models import Candle, Direction, OrderRequest, Position
 from app.services.market_scanner import MarketOpportunity, MarketScanResult
 
 PaperTradeStatus = Literal["open", "closed"]
+PaperTimeframeMode = Literal["auto", "manual"]
 PaperExitReason = Literal[
     "stop_loss",
     "take_profit",
@@ -158,6 +159,7 @@ class PaperEngineStatus:
     enabled: bool
     virtual_only: bool
     timeframe: str
+    timeframe_mode: PaperTimeframeMode
     minimum_opportunity_score: float
     max_open_positions: int
     risk_per_trade_pct: float
@@ -230,6 +232,7 @@ class PaperTradingService:
         adaptive_learning_enabled: bool = True,
         learning_min_samples: int = 8,
         trade_source: str = "mt5-virtual",
+        timeframe_mode: PaperTimeframeMode = "manual",
     ) -> None:
         self.state_file = self._resolve_state_file(state_file)
         self.backup_file = self.state_file.with_suffix(f"{self.state_file.suffix}.bak")
@@ -246,6 +249,7 @@ class PaperTradingService:
         self.learning_min_samples = learning_min_samples
         self.trade_source = trade_source
         self.timeframe = "1m"
+        self.timeframe_mode = timeframe_mode
         self.trades: list[PaperTrade] = []
         self.decisions: list[PaperDecision] = []
         self.equity_curve: list[PaperEquityPoint] = []
@@ -431,7 +435,8 @@ class PaperTradingService:
                     f"Scanned {scan.scanned_symbols} instruments; found {len(actionable)} "
                     f"actionable signals; opened {self.opened_last_cycle}; closed "
                     f"{self.closed_last_cycle}; {blocked_by_limit} blocked by the virtual "
-                    f"position limit; {learning_blocked} filtered by the paper learning overlay."
+                    f"position limit; {learning_blocked} filtered by the paper learning overlay. "
+                    f"Timeframe {self.timeframe} ({self.timeframe_mode} selection)."
                 ),
             )
             self._append_equity_point(cycle_time)
@@ -455,6 +460,7 @@ class PaperTradingService:
         *,
         enabled: bool | None = None,
         timeframe: str | None = None,
+        timeframe_mode: PaperTimeframeMode | None = None,
         minimum_opportunity_score: float | None = None,
         max_open_positions: int | None = None,
     ) -> PaperPortfolio:
@@ -463,6 +469,8 @@ class PaperTradingService:
                 self.enabled = enabled
             if timeframe is not None:
                 self.timeframe = timeframe
+            if timeframe_mode is not None:
+                self.timeframe_mode = timeframe_mode
             if minimum_opportunity_score is not None:
                 self.minimum_opportunity_score = minimum_opportunity_score
             if max_open_positions is not None:
@@ -473,7 +481,8 @@ class PaperTradingService:
                 outcome="updated",
                 reason=(
                     f"Virtual engine {'running' if self.enabled else 'paused'}; timeframe "
-                    f"{self.timeframe}; minimum score {self.minimum_opportunity_score:.1f}; "
+                    f"{self.timeframe} ({self.timeframe_mode} selection); minimum score "
+                    f"{self.minimum_opportunity_score:.1f}; "
                     f"maximum {self.max_open_positions} open positions."
                 ),
             )
@@ -546,6 +555,7 @@ class PaperTradingService:
                 enabled=self.enabled,
                 virtual_only=True,
                 timeframe=self.timeframe,
+                timeframe_mode=self.timeframe_mode,
                 minimum_opportunity_score=self.minimum_opportunity_score,
                 max_open_positions=self.max_open_positions,
                 risk_per_trade_pct=self.risk_per_trade_pct,
@@ -1142,6 +1152,7 @@ class PaperTradingService:
             "max_open_positions": self.max_open_positions,
             "minimum_opportunity_score": self.minimum_opportunity_score,
             "timeframe": self.timeframe,
+            "timeframe_mode": self.timeframe_mode,
             "cycle_count": self.cycle_count,
             "last_cycle_at": self._datetime_text(self.last_cycle_at),
             "last_scan_at": self._datetime_text(self.last_scan_at),
@@ -1216,6 +1227,9 @@ class PaperTradingService:
                 payload.get("minimum_opportunity_score", self.minimum_opportunity_score)
             )
             self.timeframe = str(payload.get("timeframe", self.timeframe))
+            raw_timeframe_mode = payload.get("timeframe_mode", self.timeframe_mode)
+            if raw_timeframe_mode in {"auto", "manual"}:
+                self.timeframe_mode = raw_timeframe_mode
             self.cycle_count = int(payload.get("cycle_count", 0))
             self.last_cycle_at = self._parse_datetime(payload.get("last_cycle_at"))
             self.last_scan_at = self._parse_datetime(payload.get("last_scan_at"))

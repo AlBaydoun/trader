@@ -179,7 +179,7 @@ function TraderCard({
             <div><dt>Win rate</dt><dd>{metrics.closed_trades ? `${metrics.win_rate.toFixed(1)}%` : "--"}</dd></div>
             <div><dt>Open / closed</dt><dd>{metrics.open_positions} / {metrics.closed_trades}</dd></div>
             <div><dt>Equity</dt><dd>{money(metrics.equity)}</dd></div>
-            <div><dt>Timeframe</dt><dd>{formatTimeframe(engine.timeframe)}</dd></div>
+            <div><dt>Timeframe</dt><dd>{formatTimeframe(engine.timeframe)}{engine.timeframe_mode === "auto" ? " · auto" : ""}</dd></div>
             <div><dt>Coverage</dt><dd>{engine.scanned_symbols ? `${engine.scanned_symbols} symbols` : "Waiting"}</dd></div>
             <div><dt>Last cycle</dt><dd>{engine.last_cycle_at ? dateTime(engine.last_cycle_at) : "Waiting"}</dd></div>
           </dl>

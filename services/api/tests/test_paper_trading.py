@@ -115,6 +115,18 @@ def test_virtual_ledger_persists_without_broker_credentials(tmp_path: Path) -> N
     assert reloaded.persistence.state_version == 2
 
 
+def test_timeframe_selection_mode_is_persisted(tmp_path: Path) -> None:
+    path = tmp_path / "paper.json"
+    service = make_service(path)
+
+    service.update_control(timeframe="15m", timeframe_mode="auto")
+
+    reloaded = make_service(path).snapshot()
+
+    assert reloaded.engine.timeframe == "15m"
+    assert reloaded.engine.timeframe_mode == "auto"
+
+
 def test_closed_outcomes_are_persisted_as_learning_feedback(tmp_path: Path) -> None:
     path = tmp_path / "paper.json"
     service = make_service(path)

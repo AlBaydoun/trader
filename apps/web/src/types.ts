@@ -407,6 +407,7 @@ export interface PaperEngineStatus {
   enabled: boolean;
   virtual_only: boolean;
   timeframe: string;
+  timeframe_mode: "auto" | "manual";
   minimum_opportunity_score: number;
   max_open_positions: number;
   risk_per_trade_pct: number;
@@ -461,6 +462,7 @@ export interface PaperPortfolio {
 export interface PaperControl {
   enabled?: boolean;
   timeframe?: "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
+  timeframe_mode?: "auto" | "manual";
   minimum_opportunity_score?: number;
   max_open_positions?: number;
 }

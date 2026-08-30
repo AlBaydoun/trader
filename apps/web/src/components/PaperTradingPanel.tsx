@@ -42,6 +42,7 @@ export function PaperTradingPanel({
   const [tab, setTab] = useState<PaperTab>("open");
   const extreme = variant === "extreme";
   const jdub = variant === "jdub";
+  const main = !extreme && !jdub;
   const engine = portfolio?.engine;
   const metrics = portfolio?.metrics;
   const panelId = extreme ? "extreme-paper-trading" : jdub ? "jdub-trading" : "paper-trading";
@@ -55,7 +56,10 @@ export function PaperTradingPanel({
             <h2>{extreme ? "Extreme Virtual Trading" : jdub ? "Jdub Traders" : "Virtual Trading"}</h2>
             <span>{extreme ? "Confirmed 85/15 reversal simulation with no real money" : jdub ? "New York opening-range simulation with no real money" : "Automatic whole-market simulation · configurable timeframe"}</span>
           </div>
-          <span className="paper-timeframe-badge">Timeframe {engine ? formatTimeframe(engine.timeframe) : "--"}</span>
+          <span className="paper-timeframe-badge">
+            Timeframe {engine ? formatTimeframe(engine.timeframe) : "--"}
+            {main && engine?.timeframe_mode === "auto" ? " · Auto-selected" : ""}
+          </span>
         </div>
         <div className="paper-actions">
           <button className="icon-text dashboard-return" type="button" onClick={onBackToDashboard}>
@@ -146,7 +150,7 @@ export function PaperTradingPanel({
                 <div><dt>Entry filter</dt><dd>{extreme ? `Confirmed 85/15 · score ${engine.minimum_opportunity_score}+` : jdub ? `Opening range · score ${engine.minimum_opportunity_score}+` : engine.minimum_opportunity_score === 0 ? "All strategy signals" : `Score ${engine.minimum_opportunity_score}+`}</dd></div>
                 <div><dt>Risk per trade</dt><dd>{engine.risk_per_trade_pct.toFixed(2)}%</dd></div>
                 <div><dt>Position limit</dt><dd>{engine.max_open_positions}</dd></div>
-                <div><dt>Cycle</dt><dd>{engine.timeframe} / {engine.cycle_interval_seconds}s</dd></div>
+                <div><dt>Cycle</dt><dd>{main && engine.timeframe_mode === "auto" ? `Auto · ${engine.timeframe}` : engine.timeframe} / {engine.cycle_interval_seconds}s</dd></div>
                 <div><dt>Costs</dt><dd>{money(metrics.fees_paid)} recorded</dd></div>
                 <div><dt>Paper learning</dt><dd>{portfolio.learning.observations} outcomes</dd></div>
               </dl>
@@ -156,12 +160,28 @@ export function PaperTradingPanel({
           <details className="paper-settings">
             <summary>Simulation controls</summary>
             <div className="paper-settings-grid">
+              {main && (
+                <label>
+                  <span>Timeframe selection</span>
+                  <select
+                    value={engine.timeframe_mode}
+                    disabled={busy}
+                    onChange={(event) => onControl({ timeframe_mode: event.target.value as PaperControl["timeframe_mode"] })}
+                  >
+                    <option value="auto">Automatic · best available</option>
+                    <option value="manual">Manual selection</option>
+                  </select>
+                </label>
+              )}
               <label>
                 <span>Timeframe</span>
                 <select
                   value={engine.timeframe}
-                  disabled={busy}
-                  onChange={(event) => onControl({ timeframe: event.target.value as PaperControl["timeframe"] })}
+                  disabled={busy || (main && engine.timeframe_mode === "auto")}
+                  onChange={(event) => onControl({
+                    timeframe: event.target.value as PaperControl["timeframe"],
+                    ...(main ? { timeframe_mode: "manual" as const } : {})
+                  })}
                 >
                   {(["1m", "5m", "15m", "1h", "4h", "1d"] as const).map((item) => (
                     <option value={item} key={item}>{item}</option>
@@ -490,7 +510,8 @@ function cycleSummary(portfolio?: PaperPortfolio, extreme = false) {
   const engine = portfolio?.engine;
   if (!engine) return "Loading the virtual portfolio.";
   if (!engine.last_cycle_at) return "The first whole-market simulation cycle is waiting to run.";
-  return `${engine.scanned_symbols} scanned, ${engine.eligible_candidates} confirmed, ${engine.opened_last_cycle} opened and ${engine.closed_last_cycle} closed in the last cycle${extreme ? " from threshold signals" : ""}.`;
+  const timeframe = `${formatTimeframe(engine.timeframe)}${engine.timeframe_mode === "auto" ? " · auto-selected" : ""}`;
+  return `${engine.scanned_symbols} scanned on ${timeframe}, ${engine.eligible_candidates} confirmed, ${engine.opened_last_cycle} opened and ${engine.closed_last_cycle} closed in the last cycle${extreme ? " from threshold signals" : ""}.`;
 }
 
 const moneyFormatter = new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });

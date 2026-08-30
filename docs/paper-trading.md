@@ -19,6 +19,15 @@ paper ledger is stored at `PAPER_STATE_FILE` and survives API restarts. Relative
 to the API service directory, so starting the server from a different folder no longer creates a
 second empty ledger. Each save is atomic and keeps a `.bak` recovery copy.
 
+Main `Virtual Trading` starts with automatic timeframe selection. Every cycle compares the
+configured `PAPER_TIMEFRAMES` set (1m, 5m, 15m, 1h, 4h, and 1d by default), selects the timeframe
+with the strongest active directional setup, and then applies the same minimum score, learning,
+position, and risk filters. The selected timeframe is shown in the panel and stored on each new
+virtual trade. You can switch to manual mode from the panel or with `PAPER_TIMEFRAME_MODE=manual`.
+Automatic selection does not force a trade: when every timeframe is below the entry threshold, the
+correct result is to wait. `Jdub Traders`, `Extreme Virtual Trading`, and Strategy Lab keep their
+own strategy-specific timeframe behavior.
+
 ## Extreme Virtual Trading
 
 The `Extreme Virtual Trading` panel is a separate paper account for the 85/15 scanner. It is

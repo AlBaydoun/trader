@@ -199,6 +199,7 @@ class PaperEngineStatusDTO(APIModel):
     enabled: bool
     virtual_only: bool
     timeframe: str
+    timeframe_mode: Literal["auto", "manual"]
     minimum_opportunity_score: float
     max_open_positions: int
     risk_per_trade_pct: float
@@ -253,6 +254,7 @@ class PaperPortfolioDTO(APIModel):
 class PaperControlRequestDTO(APIModel):
     enabled: bool | None = None
     timeframe: Literal["1m", "5m", "15m", "1h", "4h", "1d"] | None = None
+    timeframe_mode: Literal["auto", "manual"] | None = None
     minimum_opportunity_score: float | None = Field(default=None, ge=0, le=100)
     max_open_positions: int | None = Field(default=None, ge=1, le=200)
 
