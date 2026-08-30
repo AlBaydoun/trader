@@ -50,9 +50,13 @@ Use the `Paper` button in the header to open the virtual results section. It sho
 - An equity curve and the current position list with entry, current price, stop, target, quantity,
   risk, result, R-multiple, confidence, and strategy reasons.
 - Closed-trade history including exit reason, duration, return, MFE, MAE, and costs.
-- A Learning tab that records wins, losses, latest faults, and factor-level reliability. After
-  `PAPER_LEARNING_MIN_SAMPLES` outcomes, a small, paper-only reliability overlay can filter weak
-  future entries. It never changes the live strategy or enables MT5 orders.
+- A Daily tab with the latest 14 UTC close days. Each row reports opening and closing virtual
+  balance, winning and losing amounts, their percentages of opening balance, win rate, net result,
+  fees, and profit factor. Open positions are excluded until they close.
+- A Learning tab that records wins, losses, latest faults, factor-level reliability, and recent
+  fault lessons. Each lesson explains the exit failure and the conservative paper-only action that
+  can follow. After `PAPER_LEARNING_MIN_SAMPLES` outcomes, a small reliability overlay can adjust
+  future paper-entry scores; it never changes the live strategy or enables MT5 orders.
 - A decision log showing cycles, opens, closes, controls, and errors.
 
 `Run now` starts a cycle immediately. `Reset` requires the exact confirmation shown in the dialog

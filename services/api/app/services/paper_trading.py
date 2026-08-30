@@ -3,7 +3,7 @@ import os
 import shutil
 from contextlib import suppress
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from threading import RLock
 from typing import Any, Literal
@@ -98,6 +98,38 @@ class PaperFactorPerformance:
 
 
 @dataclass
+class PaperDailyReport:
+    date: str
+    opening_balance: float
+    closing_balance: float
+    closed_trades: int
+    winning_trades: int
+    losing_trades: int
+    win_rate_pct: float
+    winning_amount: float
+    losing_amount: float
+    winning_pct: float
+    losing_pct: float
+    net_pnl: float
+    net_return_pct: float
+    fees_paid: float
+    profit_factor: float | None
+
+
+@dataclass
+class PaperLearningLesson:
+    observed_at: datetime
+    trade_id: str
+    symbol: str
+    direction: Direction
+    exit_reason: str
+    r_multiple: float
+    factors: list[str]
+    fault: str
+    future_action: str
+
+
+@dataclass
 class PaperLearningProfile:
     enabled: bool
     mode: str
@@ -108,6 +140,8 @@ class PaperLearningProfile:
     last_fault: str
     recommendation: str
     factor_performance: list[PaperFactorPerformance]
+    future_plan: str
+    lessons: list[PaperLearningLesson]
 
 
 @dataclass
@@ -172,6 +206,7 @@ class PaperPortfolio:
     decisions: list[PaperDecision]
     equity_curve: list[PaperEquityPoint]
     learning: PaperLearningProfile
+    daily_reports: list[PaperDailyReport]
     persistence: PaperPersistenceStatus
     disclaimer: str
 
@@ -527,7 +562,8 @@ class PaperTradingService:
                 opened_last_cycle=self.opened_last_cycle,
                 closed_last_cycle=self.closed_last_cycle,
             )
-            learning = self._learning_profile()
+            learning = self._learning_profile(closed_trades)
+            daily_reports = self._daily_reports(self._closed_trades())
             persistence = PaperPersistenceStatus(
                 storage="Local server ledger",
                 state_version=2,
@@ -543,6 +579,7 @@ class PaperTradingService:
                 decisions=list(reversed(self.decisions[-500:])),
                 equity_curve=self.equity_curve[-1000:],
                 learning=learning,
+                daily_reports=daily_reports,
                 persistence=persistence,
                 disclaimer=(
                     "Virtual results use observed prices plus configured simulation costs. They "
@@ -813,14 +850,10 @@ class PaperTradingService:
                 continue
             wins = stats.get("wins", 0.0)
             reliability = (wins + 1.0) / (samples + 2.0)
-            direction = (
-                1.0
-                if reason.impact == "bullish"
-                else -1.0
-                if reason.impact == "bearish"
-                else 0.0
-            )
-            adjustments.append((reliability - 0.5) * 10.0 * direction)
+            # Reliability belongs to the factor, not the trade direction. A bearish
+            # factor can be useful for sells just as a bullish factor can be useful
+            # for buys, so do not invert the learned evidence for sell candidates.
+            adjustments.append((reliability - 0.5) * 10.0)
         if not adjustments:
             return 0.0
         return round(max(-10.0, min(10.0, sum(adjustments) / len(adjustments))), 2)
@@ -858,7 +891,10 @@ class PaperTradingService:
             )
         return "Paper learning updated the factor reliability overlay for future entries."
 
-    def _learning_profile(self) -> PaperLearningProfile:
+    def _learning_profile(
+        self, closed_trades: list[PaperTrade] | None = None
+    ) -> PaperLearningProfile:
+        closed_trades = closed_trades if closed_trades is not None else self._closed_trades()
         factors: list[PaperFactorPerformance] = []
         for factor, stats in sorted(
             self.learning_stats.items(),
@@ -904,6 +940,45 @@ class PaperTradingService:
                 recommendation = f"Paper evidence supports these factors: {', '.join(strong[:3])}."
             else:
                 recommendation = "Paper evidence is mixed; keeping the base strategy weights."
+        if not self.adaptive_learning_enabled:
+            future_plan = (
+                "Outcomes are recorded for review, but the adaptive overlay is disabled. "
+                "No factor weight will change until it is explicitly enabled in paper mode."
+            )
+        elif self.learning_observations < self.learning_min_samples:
+            remaining = self.learning_min_samples - self.learning_observations
+            future_plan = (
+                f"Collect {remaining} more closed outcome{'s' if remaining != 1 else ''} before "
+                "changing factor weights. Until then, the base strategy and risk limits stay fixed."
+            )
+        else:
+            weak = [
+                item.factor
+                for item in factors
+                if item.samples >= self.learning_min_samples and item.win_rate < 45
+            ]
+            strong = [
+                item.factor
+                for item in factors
+                if item.samples >= self.learning_min_samples and item.win_rate >= 60
+            ]
+            if weak:
+                future_plan = (
+                    "Future paper entries will apply a small negative reliability adjustment to "
+                    f"{', '.join(weak[:3])}; the candidate still needs the base strategy gate, "
+                    "and risk limits remain unchanged."
+                )
+            elif strong:
+                future_plan = (
+                    "Future paper entries may receive a small positive reliability adjustment for "
+                    f"{', '.join(strong[:3])}. This does not bypass confirmation, costs, or "
+                    "risk caps."
+                )
+            else:
+                future_plan = (
+                    "Evidence is mixed, so future paper entries keep the base weights while more "
+                    "closed outcomes are collected. No live rule is changed."
+                )
         return PaperLearningProfile(
             enabled=self.adaptive_learning_enabled,
             mode="Paper-only adaptive overlay",
@@ -914,7 +989,137 @@ class PaperTradingService:
             last_fault=self.learning_last_fault,
             recommendation=recommendation,
             factor_performance=factors,
+            future_plan=future_plan,
+            lessons=self._learning_lessons(closed_trades),
         )
+
+    def _daily_reports(
+        self,
+        closed_trades: list[PaperTrade],
+        days: int = 14,
+        as_of: datetime | None = None,
+    ) -> list[PaperDailyReport]:
+        """Build restart-safe UTC close-day reports from the persisted trade ledger."""
+        today = (as_of or datetime.now(UTC)).astimezone(UTC).date()
+        report_dates = [today - timedelta(days=offset) for offset in range(days)]
+        reports: list[PaperDailyReport] = []
+        for report_date in report_dates:
+            day_trades = [
+                trade
+                for trade in closed_trades
+                if self._trade_day(trade) == report_date
+            ]
+            opening_balance = self.starting_balance + sum(
+                trade.net_pnl
+                for trade in closed_trades
+                if self._trade_day(trade) < report_date
+            )
+            winning_amount = sum(max(trade.net_pnl, 0.0) for trade in day_trades)
+            losing_amount = sum(max(-trade.net_pnl, 0.0) for trade in day_trades)
+            net_pnl = sum(trade.net_pnl for trade in day_trades)
+            closed_count = len(day_trades)
+            winners = sum(1 for trade in day_trades if trade.net_pnl > 0)
+            losers = sum(1 for trade in day_trades if trade.net_pnl < 0)
+            reports.append(
+                PaperDailyReport(
+                    date=report_date.isoformat(),
+                    opening_balance=round(opening_balance, 2),
+                    closing_balance=round(opening_balance + net_pnl, 2),
+                    closed_trades=closed_count,
+                    winning_trades=winners,
+                    losing_trades=losers,
+                    win_rate_pct=round(winners / closed_count * 100, 1)
+                    if closed_count
+                    else 0.0,
+                    winning_amount=round(winning_amount, 2),
+                    losing_amount=round(losing_amount, 2),
+                    winning_pct=round(winning_amount / opening_balance * 100, 3)
+                    if opening_balance > 0
+                    else 0.0,
+                    losing_pct=round(losing_amount / opening_balance * 100, 3)
+                    if opening_balance > 0
+                    else 0.0,
+                    net_pnl=round(net_pnl, 2),
+                    net_return_pct=round(net_pnl / opening_balance * 100, 3)
+                    if opening_balance > 0
+                    else 0.0,
+                    fees_paid=round(
+                        sum(trade.entry_fee + trade.exit_fee for trade in day_trades), 2
+                    ),
+                    profit_factor=round(winning_amount / losing_amount, 3)
+                    if losing_amount > 0
+                    else None,
+                )
+            )
+        return reports
+
+    def _learning_lessons(self, closed_trades: list[PaperTrade]) -> list[PaperLearningLesson]:
+        lessons: list[PaperLearningLesson] = []
+        for trade in sorted(
+            (item for item in closed_trades if item.net_pnl <= 0),
+            key=lambda item: item.closed_at or item.updated_at,
+            reverse=True,
+        )[:12]:
+            exit_reason = trade.exit_reason or "unknown"
+            if exit_reason == "stop_loss":
+                fault = (
+                    "The setup reached its stop before the target, so the entry confirmation "
+                    "did not survive the trade."
+                )
+            elif exit_reason == "signal_reversal":
+                fault = "The market invalidated the direction before the stop or target."
+            elif exit_reason == "time_limit":
+                fault = "The trade did not reach its target inside the configured holding window."
+            elif exit_reason == "operator":
+                fault = (
+                    "The position was closed manually; this is recorded but not treated as a "
+                    "strategy fault."
+                )
+            else:
+                fault = (
+                    "The virtual trade finished without a positive net result and is kept for "
+                    "review."
+                )
+            factors = trade.factor_categories or ["manual"]
+            if not self.adaptive_learning_enabled:
+                future_action = (
+                    "Keep the same base rule for now; the overlay is disabled, so this outcome "
+                    "only informs review."
+                )
+            elif self.learning_observations < self.learning_min_samples:
+                remaining = self.learning_min_samples - self.learning_observations
+                future_action = (
+                    f"Keep risk capped and collect {remaining} more "
+                    f"outcome{'s' if remaining != 1 else ''} "
+                    "before changing factor weights."
+                )
+            else:
+                future_action = (
+                    "Use the factor reliability overlay on similar paper entries; weak factors "
+                    "receive a small negative score adjustment while the full strategy gate and "
+                    "risk limits remain required."
+                )
+            lessons.append(
+                PaperLearningLesson(
+                    observed_at=trade.closed_at or trade.updated_at,
+                    trade_id=trade.id,
+                    symbol=trade.symbol,
+                    direction=trade.direction,
+                    exit_reason=exit_reason,
+                    r_multiple=round(trade.r_multiple, 3),
+                    factors=factors,
+                    fault=fault,
+                    future_action=future_action,
+                )
+            )
+        return lessons
+
+    @staticmethod
+    def _trade_day(trade: PaperTrade) -> date:
+        timestamp = trade.closed_at or trade.updated_at
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=UTC)
+        return timestamp.astimezone(UTC).date()
 
     def _trim(self) -> None:
         open_positions = self._open_trades()

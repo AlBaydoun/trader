@@ -157,6 +157,9 @@ def test_paper_portfolio_is_explicitly_virtual(account_registry: AccountRegistry
     payload = response.json()
     assert payload["engine"]["virtual_only"] is True
     assert "do not place MT5 orders" in payload["disclaimer"]
+    assert payload["daily_reports"]
+    assert "future_plan" in payload["learning"]
+    assert "lessons" in payload["learning"]
 
 
 def test_extreme_backtest_uses_verified_mt5_history(

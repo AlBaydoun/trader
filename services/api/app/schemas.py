@@ -143,6 +143,36 @@ class PaperFactorPerformanceDTO(APIModel):
     average_r_multiple: float
 
 
+class PaperDailyReportDTO(APIModel):
+    date: str
+    opening_balance: float
+    closing_balance: float
+    closed_trades: int
+    winning_trades: int
+    losing_trades: int
+    win_rate_pct: float
+    winning_amount: float
+    losing_amount: float
+    winning_pct: float
+    losing_pct: float
+    net_pnl: float
+    net_return_pct: float
+    fees_paid: float
+    profit_factor: float | None
+
+
+class PaperLearningLessonDTO(APIModel):
+    observed_at: datetime
+    trade_id: str
+    symbol: str
+    direction: Literal["buy", "sell"]
+    exit_reason: str
+    r_multiple: float
+    factors: list[str]
+    fault: str
+    future_action: str
+
+
 class PaperLearningProfileDTO(APIModel):
     enabled: bool
     mode: str
@@ -153,6 +183,8 @@ class PaperLearningProfileDTO(APIModel):
     last_fault: str
     recommendation: str
     factor_performance: list[PaperFactorPerformanceDTO]
+    future_plan: str
+    lessons: list[PaperLearningLessonDTO]
 
 
 class PaperPersistenceStatusDTO(APIModel):
@@ -213,6 +245,7 @@ class PaperPortfolioDTO(APIModel):
     decisions: list[PaperDecisionDTO]
     equity_curve: list[PaperEquityPointDTO]
     learning: PaperLearningProfileDTO
+    daily_reports: list[PaperDailyReportDTO]
     persistence: PaperPersistenceStatusDTO
     disclaimer: str
 

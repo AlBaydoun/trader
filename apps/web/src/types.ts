@@ -361,6 +361,38 @@ export interface PaperLearningProfile {
   last_fault: string;
   recommendation: string;
   factor_performance: PaperFactorPerformance[];
+  future_plan: string;
+  lessons: PaperLearningLesson[];
+}
+
+export interface PaperLearningLesson {
+  observed_at: string;
+  trade_id: string;
+  symbol: string;
+  direction: "buy" | "sell";
+  exit_reason: string;
+  r_multiple: number;
+  factors: string[];
+  fault: string;
+  future_action: string;
+}
+
+export interface PaperDailyReport {
+  date: string;
+  opening_balance: number;
+  closing_balance: number;
+  closed_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  win_rate_pct: number;
+  winning_amount: number;
+  losing_amount: number;
+  winning_pct: number;
+  losing_pct: number;
+  net_pnl: number;
+  net_return_pct: number;
+  fees_paid: number;
+  profit_factor: number | null;
 }
 
 export interface PaperPersistenceStatus {
@@ -421,6 +453,7 @@ export interface PaperPortfolio {
   decisions: PaperDecision[];
   equity_curve: PaperEquityPoint[];
   learning: PaperLearningProfile;
+  daily_reports: PaperDailyReport[];
   persistence: PaperPersistenceStatus;
   disclaimer: string;
 }

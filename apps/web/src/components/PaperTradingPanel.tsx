@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import type { PaperControl, PaperEquityPoint, PaperPortfolio, PaperTrade } from "../types";
 
-type PaperTab = "open" | "history" | "learning" | "log";
+type PaperTab = "open" | "history" | "daily" | "learning" | "log";
 type PaperTradingVariant = "market" | "extreme";
 
 interface PaperTradingPanelProps {
@@ -193,6 +193,9 @@ export function PaperTradingPanel({
               <button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>
                 History <span>{metrics.closed_trades}</span>
               </button>
+              <button className={tab === "daily" ? "active" : ""} onClick={() => setTab("daily")}>
+                Daily <span>{portfolio.daily_reports.length}</span>
+              </button>
               <button className={tab === "learning" ? "active" : ""} onClick={() => setTab("learning")}>
                 Learning <span>{portfolio.learning.observations}</span>
               </button>
@@ -209,6 +212,7 @@ export function PaperTradingPanel({
             <OpenTrades trades={portfolio.open_positions} onClose={onClose} busy={busy} extreme={extreme} />
           )}
           {tab === "history" && <TradeHistory trades={portfolio.closed_trades} extreme={extreme} />}
+          {tab === "daily" && <DailyReport reports={portfolio.daily_reports} />}
           {tab === "learning" && <LearningPanel learning={portfolio.learning} />}
           {tab === "log" && (
             <div className="decision-log">
@@ -235,6 +239,50 @@ export function PaperTradingPanel({
   );
 }
 
+function DailyReport({ reports }: { reports: PaperPortfolio["daily_reports"] }) {
+  if (!reports.length) return <PaperEmpty text="Daily results will appear after the first virtual trade closes." />;
+  return (
+    <div className="daily-report">
+      <div className="daily-report-summary">
+        <strong>UTC close-day report</strong>
+        <span>Only closed virtual trades are included. Amounts include simulated fees.</span>
+      </div>
+      <div className="paper-table-wrap">
+        <table className="paper-table daily-report-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Wins</th>
+              <th>Losses</th>
+              <th>Win rate</th>
+              <th>Win amount</th>
+              <th>Loss amount</th>
+              <th>Net</th>
+              <th>Net %</th>
+              <th>Profit factor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reports.map((report) => (
+              <tr key={report.date}>
+                <td><strong>{reportDate(report.date)}</strong><span>Close day · {money(report.closing_balance)} balance</span></td>
+                <td className="positive"><strong>{report.winning_trades}</strong><span>{money(report.winning_amount)} / {report.winning_pct.toFixed(3)}%</span></td>
+                <td className="negative"><strong>{report.losing_trades}</strong><span>{money(report.losing_amount)} / {report.losing_pct.toFixed(3)}%</span></td>
+                <td>{report.win_rate_pct.toFixed(1)}%</td>
+                <td className="positive">{money(report.winning_amount)}</td>
+                <td className="negative">{money(report.losing_amount)}</td>
+                <td className={pnlClass(report.net_pnl)}><strong>{signedMoney(report.net_pnl)}</strong><span>{money(report.fees_paid)} fees</span></td>
+                <td className={pnlClass(report.net_return_pct)}>{report.net_return_pct >= 0 ? "+" : ""}{report.net_return_pct.toFixed(3)}%</td>
+                <td>{report.profit_factor?.toFixed(2) ?? "--"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function LearningPanel({ learning }: { learning: PaperPortfolio["learning"] }) {
   return (
     <div className="learning-workspace">
@@ -248,6 +296,10 @@ function LearningPanel({ learning }: { learning: PaperPortfolio["learning"] }) {
       <div className="learning-recommendation">
         <strong>Current recommendation</strong>
         <p>{learning.recommendation}</p>
+      </div>
+      <div className="learning-plan">
+        <strong>How it will adapt next</strong>
+        <p>{learning.future_plan}</p>
       </div>
       {learning.last_fault && (
         <div className="learning-fault">
@@ -272,6 +324,23 @@ function LearningPanel({ learning }: { learning: PaperPortfolio["learning"] }) {
       ) : (
         <PaperEmpty text="Completed virtual trades will teach the paper overlay which factors deserve more or less weight." />
       )}
+      <div className="learning-lessons">
+        <div className="learning-lessons-heading">
+          <strong>Recent fault lessons</strong>
+          <span>Latest non-positive outcomes</span>
+        </div>
+        {learning.lessons.length ? learning.lessons.map((lesson) => (
+          <article className="learning-lesson" key={lesson.trade_id}>
+            <header>
+              <strong>{lesson.symbol} · {lesson.direction}</strong>
+              <span>{dateTime(lesson.observed_at)} · {lesson.r_multiple.toFixed(2)}R · {lesson.exit_reason.replaceAll("_", " ")}</span>
+            </header>
+            <p><b>Fault</b>{lesson.fault}</p>
+            <p><b>Future action</b>{lesson.future_action}</p>
+            <div className="learning-factors">{lesson.factors.map((factor) => <span key={factor}>{factor}</span>)}</div>
+          </article>
+        )) : <PaperEmpty text="Loss lessons will appear after a virtual position closes at or below break-even." />}
+      </div>
       <footer className="learning-footnote">
         <ShieldCheck size={13} />
         <span>Learning stays inside paper trading. It never changes the deterministic live strategy or unlocks MT5 orders.</span>
@@ -425,3 +494,4 @@ function duration(start: string, end: string | null) { if (!end) return age(star
 function exitLabel(reason: PaperTrade["exit_reason"]) { return reason ? reason.replaceAll("_", " ") : "--"; }
 function signalTime(trade: PaperTrade) { return trade.signal_at ?? trade.opened_at; }
 function levelLabel(level: string) { return level === "upper_85" ? "85.00 / sell" : level === "lower_15" ? "15.00 / buy" : level; }
+function reportDate(value: string) { return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit", year: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`)); }

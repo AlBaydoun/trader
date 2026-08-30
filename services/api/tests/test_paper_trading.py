@@ -138,6 +138,46 @@ def test_closed_outcomes_are_persisted_as_learning_feedback(tmp_path: Path) -> N
     assert reloaded.learning.factor_performance[0].losses == 1
 
 
+def test_daily_reports_and_fault_lessons_explain_paper_results(tmp_path: Path) -> None:
+    service = make_service(tmp_path / "paper.json")
+    first_day = datetime(2026, 1, 1, 10, tzinfo=UTC)
+    second_day = datetime(2026, 1, 2, 10, tzinfo=UTC)
+
+    service.process_cycle(scan(opportunity(), now=first_day), {}, "test-account", first_day)
+    service.process_cycle(
+        scan(opportunity(), now=first_day + timedelta(minutes=1)),
+        {"XAUUSD": candle(low=100, high=102.2, close=101.8, now=first_day)},
+        "test-account",
+        first_day + timedelta(minutes=1),
+    )
+    service.process_cycle(scan(opportunity(), now=second_day), {}, "test-account", second_day)
+    result = service.process_cycle(
+        scan(opportunity(), now=second_day + timedelta(minutes=1)),
+        {"XAUUSD": candle(low=98.8, high=102.2, close=100, now=second_day)},
+        "test-account",
+        second_day + timedelta(minutes=1),
+    )
+
+    reports = service._daily_reports(
+        service._closed_trades(), days=3, as_of=second_day + timedelta(minutes=1)
+    )
+
+    assert reports[0].date == "2026-01-02"
+    assert reports[0].winning_trades == 0
+    assert reports[0].losing_trades == 1
+    assert reports[0].losing_amount > 0
+    assert reports[0].losing_pct > 0
+    assert reports[0].net_pnl < 0
+    assert reports[1].date == "2026-01-01"
+    assert reports[1].winning_trades == 1
+    assert reports[1].winning_amount > 0
+    assert reports[1].win_rate_pct == 100
+    assert result.learning.lessons[0].trade_id == result.closed_trades[0].id
+    assert "stop" in result.learning.lessons[0].fault
+    assert "collect" in result.learning.lessons[0].future_action
+    assert "Collect" in result.learning.future_plan
+
+
 def test_corrupt_primary_ledger_recovers_from_backup(tmp_path: Path) -> None:
     path = tmp_path / "paper.json"
     service = make_service(path)

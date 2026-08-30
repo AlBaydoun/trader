@@ -2412,6 +2412,36 @@ button:disabled {
   background: #151d22;
 }
 
+.daily-report {
+  border-bottom: 1px solid #26313a;
+}
+
+.daily-report-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 16px;
+  border-bottom: 1px solid #202930;
+}
+
+.daily-report-summary strong,
+.learning-lessons-heading strong {
+  color: #dce5eb;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.daily-report-summary span,
+.learning-lessons-heading span {
+  color: #7f8e9b;
+  font-size: 10px;
+}
+
+.daily-report-table {
+  min-width: 1120px;
+}
+
 .learning-workspace {
   min-height: 180px;
   border-bottom: 1px solid #26313a;
@@ -2513,6 +2543,92 @@ button:disabled {
 
 .learning-factor-row .neutral {
   color: #f4d57a;
+}
+
+.learning-plan {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #202930;
+}
+
+.learning-plan strong {
+  flex: 0 0 145px;
+  color: #8fdcc4;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.learning-plan p {
+  margin: 0;
+  color: #cbd5dc;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.learning-lessons {
+  border-bottom: 1px solid #202930;
+}
+
+.learning-lessons-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px 7px;
+}
+
+.learning-lesson {
+  padding: 9px 16px 10px;
+  border-top: 1px solid #202930;
+}
+
+.learning-lesson header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.learning-lesson header strong {
+  color: #dce5eb;
+  font-size: 10px;
+}
+
+.learning-lesson header span,
+.learning-lesson p {
+  color: #7f8e9b;
+  font-size: 10px;
+}
+
+.learning-lesson p {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+
+.learning-lesson p b {
+  flex: 0 0 82px;
+  color: #afbac3;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.learning-factors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.learning-factors span {
+  padding: 3px 5px;
+  border: 1px solid #34424c;
+  border-radius: 3px;
+  color: #8fdcc4;
+  font-size: 9px;
 }
 
 .learning-footnote {
