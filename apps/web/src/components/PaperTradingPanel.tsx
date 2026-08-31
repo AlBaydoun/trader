@@ -143,12 +143,12 @@ export function PaperTradingPanel({
               <div className="paper-subheading">
                 <div>
                   <strong>Simulation rules</strong>
-                  <span>{extreme ? "Applied only after RSI(1), MACD, and MA confirmation" : jdub ? "15m New York range, 5m close, then 1m trigger" : rigorgate ? "BUY opens a long; WAIT does nothing; SELL closes a matching long" : candlestick ? "Applied after a named pattern, trend, volatility, and spread checks" : "Applied to every eligible directional signal on the selected timeframe"}</span>
+                  <span>{extreme ? "Applied only after RSI(1), MACD, and MA confirmation" : jdub ? "15m New York range, 5m close, then 1m trigger" : rigorgate ? "BUY opens a long; WAIT does nothing; SELL closes a matching long" : candlestick ? "M15 Bullish engulfing opens a BUY; ATR sets SL and 1.35R sets TP" : "Applied to every eligible directional signal on the selected timeframe"}</span>
                 </div>
               </div>
               <dl>
                 <div><dt>Market coverage</dt><dd>{engine.scanned_symbols || "--"} instruments</dd></div>
-                <div><dt>Entry filter</dt><dd>{extreme ? `Confirmed 85/15 · score ${engine.minimum_opportunity_score}+` : jdub ? `Opening range · score ${engine.minimum_opportunity_score}+` : rigorgate ? `BUY / SELL gate · score ${engine.minimum_opportunity_score}+` : candlestick ? `Named pattern · score ${engine.minimum_opportunity_score}+` : engine.minimum_opportunity_score === 0 ? "All strategy signals" : `Score ${engine.minimum_opportunity_score}+`}</dd></div>
+                <div><dt>Entry filter</dt><dd>{extreme ? `Confirmed 85/15 · score ${engine.minimum_opportunity_score}+` : jdub ? `Opening range · score ${engine.minimum_opportunity_score}+` : rigorgate ? `BUY / SELL gate · score ${engine.minimum_opportunity_score}+` : candlestick ? `M15 Bullish engulfing -> BUY · score ${engine.minimum_opportunity_score}+` : engine.minimum_opportunity_score === 0 ? "All strategy signals" : `Score ${engine.minimum_opportunity_score}+`}</dd></div>
                 <div><dt>Risk per trade</dt><dd>{engine.risk_per_trade_pct.toFixed(2)}%</dd></div>
                 <div><dt>Position limit</dt><dd>{engine.max_open_positions}</dd></div>
                 <div><dt>Cycle</dt><dd>{engine.timeframe_mode === "auto" ? `Auto · ${engine.timeframe}` : engine.timeframe} / {engine.cycle_interval_seconds}s</dd></div>

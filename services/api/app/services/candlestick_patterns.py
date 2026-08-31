@@ -102,10 +102,10 @@ class CandlestickPatternBotService:
             return self.ledger.snapshot()
 
         prices = {}
-        for position in self.ledger.positions():
-            candles = self.bridge.candles(account, position.symbol, scan.timeframe, 80)
+        for trade in self.ledger.snapshot().open_positions:
+            candles = self.bridge.candles(account, trade.symbol, trade.timeframe, 80)
             if candles:
-                prices[position.symbol] = candles[-1]
+                prices[trade.symbol] = candles[-1]
         return self.ledger.process_cycle(scan, prices, account.id, now=scan.generated_at)
 
     def _scans(
@@ -190,7 +190,17 @@ class CandlestickPatternBotService:
         directional = [pattern for pattern in patterns if pattern.direction != Direction.hold]
         if not directional:
             return None
-        strongest = max(directional, key=lambda pattern: pattern.strength)
+        bullish_engulfing = next(
+            (pattern for pattern in directional if pattern.id == "bullish-engulfing"),
+            None,
+        )
+        # The requested M15 rule gives a confirmed green engulfing candle priority over
+        # another formation that happens to share the same closing sequence.
+        strongest = (
+            bullish_engulfing
+            if timeframe == "15m" and bullish_engulfing is not None
+            else max(directional, key=lambda pattern: pattern.strength)
+        )
         latest = candles[-1]
         atr = _atr(candles[-15:])
         if not isfinite(atr) or atr <= 0 or latest.close <= 0:

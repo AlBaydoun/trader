@@ -80,7 +80,7 @@ class Settings(BaseSettings):
     candlestick_paper_starting_balance: float = Field(default=10000.0, gt=0)
     candlestick_paper_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
     candlestick_paper_max_open_positions: int = Field(default=3, ge=1, le=200)
-    candlestick_paper_min_opportunity_score: float = Field(default=65.0, ge=0.0, le=100.0)
+    candlestick_paper_min_opportunity_score: float = Field(default=60.0, ge=0.0, le=100.0)
     candlestick_paper_cycle_interval_seconds: int = Field(default=60, ge=15, le=3600)
     candlestick_paper_max_position_minutes: int = Field(default=240, ge=1, le=43200)
 
