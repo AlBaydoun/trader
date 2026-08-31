@@ -55,10 +55,11 @@ EMA(20)/EMA(50) trend agreement, candle body quality, quote freshness, spread, a
 stop/target model. A Doji is recorded as context and does not open a trade by itself.
 
 When the bot is set to Manual M15, a confirmed green Bullish Engulfing on the latest closed candle
-is prioritized as a BUY candidate. The bot sets the stop loss below the lower of the latest two
-candle lows with an ATR buffer, then sets take profit at 1.35 times the risk distance. Active
-quotes, spread, risk limits, position limits, and the paper-only execution boundary still apply;
-the pattern is not a guarantee of profit.
+is prioritized as a BUY candidate, while a confirmed red Bearish Engulfing is prioritized as a
+SELL candidate. A BUY receives a stop below the latest two candle lows and a target above entry;
+a SELL receives a stop above the latest two candle highs and a target below entry. Both use an ATR
+buffer and a 1.35R target. Active quotes, spread, risk limits, position limits, and the paper-only
+execution boundary still apply; the pattern is not a guarantee of profit.
 
 Its history, daily reports, learning lessons, decisions, and equity curve are isolated at
 `CANDLESTICK_PAPER_STATE_FILE`. The panel shows the detected pattern in each trade's signal

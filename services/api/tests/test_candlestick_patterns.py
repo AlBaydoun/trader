@@ -121,6 +121,30 @@ def bullish_engulfing_history() -> list[Candle]:
     return candles
 
 
+def bearish_engulfing_history() -> list[Candle]:
+    candles = [
+        Candle(
+            symbol="TEST",
+            timeframe="15m",
+            ts=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(minutes=index * 15),
+            open=100 + index * 0.05,
+            high=100.25 + index * 0.05,
+            low=99.75 + index * 0.05,
+            close=100.15 + index * 0.05,
+            volume=100,
+            source="mt5",
+        )
+        for index in range(58)
+    ]
+    candles.extend(
+        [
+            candle(58, 108, 109, high=109.2, low=107.8),
+            candle(59, 109.5, 106, high=109.8, low=105.8),
+        ]
+    )
+    return candles
+
+
 def test_m15_bullish_engulfing_opens_with_automatic_sl_and_tp(tmp_path: Path) -> None:
     ledger = PaperTradingService(
         str(tmp_path / "candlestick.json"),
@@ -155,3 +179,38 @@ def test_m15_bullish_engulfing_opens_with_automatic_sl_and_tp(tmp_path: Path) ->
     assert trade.stop_loss is not None and trade.stop_loss < trade.entry_price
     assert trade.take_profit is not None and trade.take_profit > trade.entry_price
     assert "Bullish engulfing" in trade.reasons[0]
+
+
+def test_m15_bearish_engulfing_opens_sell_with_automatic_sl_and_tp(tmp_path: Path) -> None:
+    ledger = PaperTradingService(
+        str(tmp_path / "candlestick-bearish.json"),
+        enabled=True,
+        starting_balance=10000,
+        risk_per_trade_pct=0.05,
+        max_open_positions=3,
+        minimum_opportunity_score=60,
+        commission_bps=1,
+        slippage_bps=0,
+        cycle_interval_seconds=60,
+        max_position_minutes=240,
+        timeframe_mode="manual",
+        timeframe="15m",
+    )
+    bot = CandlestickPatternBotService(ledger, PatternBridge(bearish_engulfing_history()))
+    account = BrokerAccountProfile(
+        id="test-account",
+        provider="JustMarkets",
+        login="1000000002",
+        server="JustMarkets-Live",
+        account_type="Standard",
+    )
+
+    portfolio = bot.process_cycle(account, max_symbols=10, force=True)
+
+    assert portfolio.metrics.open_positions == 1
+    trade = portfolio.open_positions[0]
+    assert trade.direction == Direction.sell
+    assert trade.timeframe == "15m"
+    assert trade.stop_loss is not None and trade.stop_loss > trade.entry_price
+    assert trade.take_profit is not None and trade.take_profit < trade.entry_price
+    assert "Bearish engulfing" in trade.reasons[0]

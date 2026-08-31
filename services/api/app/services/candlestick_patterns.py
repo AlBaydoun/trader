@@ -194,11 +194,18 @@ class CandlestickPatternBotService:
             (pattern for pattern in directional if pattern.id == "bullish-engulfing"),
             None,
         )
-        # The requested M15 rule gives a confirmed green engulfing candle priority over
-        # another formation that happens to share the same closing sequence.
+        bearish_engulfing = next(
+            (pattern for pattern in directional if pattern.id == "bearish-engulfing"),
+            None,
+        )
+        # On M15, an engulfing candle is the explicit entry trigger in either direction.
+        # This keeps a confirmed red bearish engulfing from being replaced by another
+        # formation that happens to share the same closing sequence.
         strongest = (
             bullish_engulfing
             if timeframe == "15m" and bullish_engulfing is not None
+            else bearish_engulfing
+            if timeframe == "15m" and bearish_engulfing is not None
             else max(directional, key=lambda pattern: pattern.strength)
         )
         latest = candles[-1]
