@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
   ArrowUp,
@@ -22,7 +22,7 @@ import type {
 } from "../types";
 
 type PaperTab = "open" | "history" | "daily" | "learning" | "log";
-type PaperTradingVariant = "market" | "jdub" | "rigorgate" | "extreme" | "candlestick" | "candlestick-buy" | "candlestick-sell" | "video-strategy";
+type PaperTradingVariant = "market" | "manual" | "jdub" | "rigorgate" | "extreme" | "candlestick" | "candlestick-buy" | "candlestick-sell" | "video-strategy";
 
 interface PaperTradingPanelProps {
   variant?: PaperTradingVariant;
@@ -40,6 +40,7 @@ interface PaperTradingPanelProps {
   manualSymbol?: string;
   manualPrice?: number;
   manualTimeframe?: PaperControl["timeframe"];
+  liveChart?: ReactNode;
 }
 
 export function PaperTradingPanel({
@@ -57,7 +58,8 @@ export function PaperTradingPanel({
   manualSymbols = [],
   manualSymbol: selectedManualSymbol,
   manualPrice,
-  manualTimeframe = "1m"
+  manualTimeframe = "1m",
+  liveChart
 }: PaperTradingPanelProps) {
   const [tab, setTab] = useState<PaperTab>("open");
   const [manualDirection, setManualDirection] = useState<ManualPaperTradeRequest["direction"]>("buy");
@@ -70,8 +72,9 @@ export function PaperTradingPanel({
   const [manualNote, setManualNote] = useState("");
   useEffect(() => {
     if (selectedManualSymbol) setManualSymbol(selectedManualSymbol);
-    if (!manualEntryDirty && manualPrice !== undefined) setManualEntry(String(manualPrice));
+    if (!manualEntryDirty) setManualEntry(manualPrice === undefined ? "" : String(manualPrice));
   }, [manualEntryDirty, manualPrice, selectedManualSymbol]);
+  const manual = variant === "manual";
   const extreme = variant === "extreme";
   const jdub = variant === "jdub";
   const rigorgate = variant === "rigorgate";
@@ -101,16 +104,16 @@ export function PaperTradingPanel({
       : "Bullish / bearish engulfing -> BUY / SELL";
   const engine = portfolio?.engine;
   const metrics = portfolio?.metrics;
-  const panelId = extreme ? "extreme-paper-trading" : jdub ? "jdub-trading" : rigorgate ? "rigorgate-trading" : candlestickBuy ? "candlestick-buy-trading" : candlestickSell ? "candlestick-sell-trading" : candlestick ? "candlestick-trading" : videoStrategy ? "video-strategy-trading" : "paper-trading";
+  const panelId = manual ? "manual-trading" : extreme ? "extreme-paper-trading" : jdub ? "jdub-trading" : rigorgate ? "rigorgate-trading" : candlestickBuy ? "candlestick-buy-trading" : candlestickSell ? "candlestick-sell-trading" : candlestick ? "candlestick-trading" : videoStrategy ? "video-strategy-trading" : "paper-trading";
 
   return (
-    <section className="paper-workspace" id={panelId} aria-label={extreme ? "Extreme virtual trading" : jdub ? "Jdub Traders virtual trading" : rigorgate ? "RigorGate virtual trading" : candlestick ? `${candlestickName} virtual trading` : videoStrategy ? "Video MA and MTF MACD virtual trading" : "Virtual paper trading"}>
+    <section className={`paper-workspace ${manual ? "manual-bot-workspace" : ""}`} id={panelId} aria-label={manual ? "Manual virtual trading" : extreme ? "Extreme virtual trading" : jdub ? "Jdub Traders virtual trading" : rigorgate ? "RigorGate virtual trading" : candlestick ? `${candlestickName} virtual trading` : videoStrategy ? "Video MA and MTF MACD virtual trading" : "Virtual paper trading"}>
       <header className="paper-header">
         <div className="paper-title">
           <span className="paper-title-icon"><FlaskConical size={19} /></span>
           <div>
-            <h2>{extreme ? "Extreme Virtual Trading" : jdub ? "Jdub Traders" : rigorgate ? "RigorGate" : candlestick ? candlestickName : videoStrategy ? "Video MA + MTF MACD Bot" : "Virtual Trading"}</h2>
-            <span>{extreme ? "Confirmed 85/15 reversal simulation with no real money" : jdub ? "New York opening-range simulation with no real money" : rigorgate ? "BUY / WAIT / SELL evidence-gated simulation with no real money" : candlestick ? candlestickDescription : videoStrategy ? "Video-derived EMA and multi-timeframe MACD simulation with no real money" : "Automatic whole-market simulation · configurable timeframe"}</span>
+            <h2>{manual ? "Manual Trading Bot" : extreme ? "Extreme Virtual Trading" : jdub ? "Jdub Traders" : rigorgate ? "RigorGate" : candlestick ? candlestickName : videoStrategy ? "Video MA + MTF MACD Bot" : "Virtual Trading"}</h2>
+            <span>{manual ? "Operator-controlled entries with live price monitoring · no real money" : extreme ? "Confirmed 85/15 reversal simulation with no real money" : jdub ? "New York opening-range simulation with no real money" : rigorgate ? "BUY / WAIT / SELL evidence-gated simulation with no real money" : candlestick ? candlestickDescription : videoStrategy ? "Video-derived EMA and multi-timeframe MACD simulation with no real money" : "Automatic whole-market simulation · configurable timeframe"}</span>
           </div>
           <span className="paper-timeframe-badge">
             Timeframe {engine ? formatTimeframe(engine.timeframe) : "--"}
@@ -130,7 +133,7 @@ export function PaperTradingPanel({
               onChange={(event) => onControl({ enabled: event.target.checked })}
             />
             <span className="toggle-track" aria-hidden="true"><span /></span>
-            <span>{engine?.enabled ? "Auto running" : "Paused"}</span>
+            <span>{engine?.enabled ? manual ? "Monitoring on" : "Auto running" : manual ? "Monitoring paused" : "Paused"}</span>
           </label>
           <button className="icon-text" type="button" disabled={busy} onClick={onRun}>
             {busy ? <RefreshCcw className="spin" size={15} /> : <Play size={15} />}
@@ -139,8 +142,8 @@ export function PaperTradingPanel({
           <button
             className="icon-button"
             type="button"
-            title={extreme ? "Reset extreme virtual portfolio" : jdub ? "Reset Jdub Traders virtual portfolio" : rigorgate ? "Reset RigorGate virtual portfolio" : candlestick ? `Reset ${candlestickName} virtual portfolio` : videoStrategy ? "Reset Video MA + MTF MACD virtual portfolio" : "Reset virtual portfolio"}
-            aria-label={extreme ? "Reset extreme virtual portfolio" : jdub ? "Reset Jdub Traders virtual portfolio" : rigorgate ? "Reset RigorGate virtual portfolio" : candlestick ? `Reset ${candlestickName} virtual portfolio` : videoStrategy ? "Reset Video MA + MTF MACD virtual portfolio" : "Reset virtual portfolio"}
+            title={manual ? "Reset manual virtual portfolio" : extreme ? "Reset extreme virtual portfolio" : jdub ? "Reset Jdub Traders virtual portfolio" : rigorgate ? "Reset RigorGate virtual portfolio" : candlestick ? `Reset ${candlestickName} virtual portfolio` : videoStrategy ? "Reset Video MA + MTF MACD virtual portfolio" : "Reset virtual portfolio"}
+            aria-label={manual ? "Reset manual virtual portfolio" : extreme ? "Reset extreme virtual portfolio" : jdub ? "Reset Jdub Traders virtual portfolio" : rigorgate ? "Reset RigorGate virtual portfolio" : candlestick ? `Reset ${candlestickName} virtual portfolio` : videoStrategy ? "Reset Video MA + MTF MACD virtual portfolio" : "Reset virtual portfolio"}
             disabled={busy}
             onClick={onReset}
           >
@@ -151,9 +154,9 @@ export function PaperTradingPanel({
 
       <div className={`paper-status ${engine?.last_error || error ? "error" : engine?.enabled ? "running" : ""}`}>
         {engine?.enabled ? <Activity size={15} /> : <CircleStop size={15} />}
-        <strong>{engine?.enabled ? "Scanning and simulating" : "Virtual engine paused"}</strong>
+        <strong>{engine?.enabled ? manual ? "Live price monitoring" : "Scanning and simulating" : manual ? "Manual monitor paused" : "Virtual engine paused"}</strong>
         <span>
-          {error || engine?.last_error || cycleSummary(portfolio, extreme)}
+          {error || engine?.last_error || (manual ? "Entries are opened only when you submit them." : cycleSummary(portfolio, extreme))}
         </span>
         <b>Virtual only</b>
         {portfolio?.persistence && (
@@ -167,7 +170,9 @@ export function PaperTradingPanel({
         )}
       </div>
 
-      {variant === "market" && onManualOpen && (
+      {liveChart}
+
+      {(variant === "market" || manual) && onManualOpen && (
         <ManualTradeForm
           busy={busy}
           direction={manualDirection}
@@ -207,7 +212,7 @@ export function PaperTradingPanel({
 
       {metrics && engine ? (
         <>
-          <div className="paper-metrics" aria-label={extreme ? "Extreme virtual trading performance" : jdub ? "Jdub Traders virtual trading performance" : rigorgate ? "RigorGate virtual trading performance" : candlestick ? `${candlestickName} performance` : videoStrategy ? "Video MA and MTF MACD performance" : "Paper trading performance"}>
+          <div className="paper-metrics" aria-label={manual ? "Manual virtual trading performance" : extreme ? "Extreme virtual trading performance" : jdub ? "Jdub Traders virtual trading performance" : rigorgate ? "RigorGate virtual trading performance" : candlestick ? `${candlestickName} performance` : videoStrategy ? "Video MA and MTF MACD performance" : "Paper trading performance"}>
             <PaperMetric label="Virtual equity" value={money(metrics.equity)} change={metrics.total_return_pct} />
             <PaperMetric label={extreme ? "Profit since signals" : "Net result"} value={signedMoney(metrics.realized_pnl + metrics.unrealized_pnl)} />
             <PaperMetric label="Open / closed" value={`${metrics.open_positions} / ${metrics.closed_trades}`} />
@@ -236,12 +241,12 @@ export function PaperTradingPanel({
               <div className="paper-subheading">
                 <div>
                   <strong>Simulation rules</strong>
-                  <span>{extreme ? "Applied only after RSI(1), MACD, and MA confirmation" : jdub ? "15m New York range, 5m close, then 1m trigger" : rigorgate ? "BUY opens a long; WAIT does nothing; SELL closes a matching long" : candlestick ? candlestickRules : videoStrategy ? "EMA(200) regime · EMA(9/36) direction · higher-timeframe MACD · 2R target" : "Applied to every eligible directional signal on the selected timeframe"}</span>
+                <span>{manual ? "Only operator-submitted entries; live MT5 prices manage exits" : extreme ? "Applied only after RSI(1), MACD, and MA confirmation" : jdub ? "15m New York range, 5m close, then 1m trigger" : rigorgate ? "BUY opens a long; WAIT does nothing; SELL closes a matching long" : candlestick ? candlestickRules : videoStrategy ? "EMA(200) regime · EMA(9/36) direction · higher-timeframe MACD · 2R target" : "Applied to every eligible directional signal on the selected timeframe"}</span>
                 </div>
               </div>
               <dl>
                 <div><dt>Market coverage</dt><dd>{engine.scanned_symbols || "--"} instruments</dd></div>
-                <div><dt>Entry filter</dt><dd>{extreme ? `Confirmed 85/15 · score ${engine.minimum_opportunity_score}+` : jdub ? `Opening range · score ${engine.minimum_opportunity_score}+` : rigorgate ? `BUY / SELL gate · score ${engine.minimum_opportunity_score}+` : candlestick ? `${candlestickFilter} · score ${engine.minimum_opportunity_score}+` : videoStrategy ? `EMA + MTF MACD · score ${engine.minimum_opportunity_score}+` : engine.minimum_opportunity_score === 0 ? "All strategy signals" : `Score ${engine.minimum_opportunity_score}+`}</dd></div>
+                <div><dt>Entry filter</dt><dd>{manual ? "Operator controlled" : extreme ? `Confirmed 85/15 · score ${engine.minimum_opportunity_score}+` : jdub ? `Opening range · score ${engine.minimum_opportunity_score}+` : rigorgate ? `BUY / SELL gate · score ${engine.minimum_opportunity_score}+` : candlestick ? `${candlestickFilter} · score ${engine.minimum_opportunity_score}+` : videoStrategy ? `EMA + MTF MACD · score ${engine.minimum_opportunity_score}+` : engine.minimum_opportunity_score === 0 ? "All strategy signals" : `Score ${engine.minimum_opportunity_score}+`}</dd></div>
                 <div><dt>Risk per trade</dt><dd>{engine.risk_per_trade_pct.toFixed(2)}%</dd></div>
                 <div><dt>Position limit</dt><dd>{engine.max_open_positions}</dd></div>
                 <div><dt>Cycle</dt><dd>{engine.timeframe_mode === "auto" ? `Auto · ${engine.timeframe}` : engine.timeframe} / {engine.cycle_interval_seconds}s</dd></div>
@@ -251,7 +256,7 @@ export function PaperTradingPanel({
             </div>
           </div>
 
-          <details className="paper-settings">
+          {!manual && <details className="paper-settings">
             <summary>Simulation controls</summary>
             <div className="paper-settings-grid">
               <label>
@@ -305,7 +310,7 @@ export function PaperTradingPanel({
                 />
               </label>
             </div>
-          </details>
+          </details>}
 
           <div className="paper-ledger-heading">
             <div className="segmented paper-tabs" aria-label="Virtual trading records">

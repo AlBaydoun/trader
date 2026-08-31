@@ -124,6 +124,22 @@ paper_trader = PaperTradingService(
     learning_min_samples=settings.paper_learning_min_samples,
     timeframe_mode="auto" if settings.paper_timeframe_mode == "auto" else "manual",
 )
+manual_trader = PaperTradingService(
+    settings.manual_paper_state_file,
+    enabled=settings.manual_paper_auto_enabled,
+    timeframe_mode="manual",
+    timeframe=settings.manual_paper_timeframe,
+    starting_balance=settings.manual_paper_starting_balance,
+    risk_per_trade_pct=settings.manual_paper_risk_per_trade_pct,
+    max_open_positions=settings.manual_paper_max_open_positions,
+    minimum_opportunity_score=0.0,
+    commission_bps=settings.paper_commission_bps,
+    slippage_bps=settings.paper_slippage_bps,
+    cycle_interval_seconds=settings.manual_paper_cycle_interval_seconds,
+    max_position_minutes=settings.manual_paper_max_position_minutes,
+    adaptive_learning_enabled=False,
+    trade_source="manual-virtual",
+)
 rigorgate_trader = RigorGateService(
     PaperTradingService(
         settings.rigorgate_paper_state_file,
@@ -446,6 +462,25 @@ def run_paper_cycle(force: bool = False) -> PaperPortfolio:
         return portfolio
 
 
+def run_manual_cycle() -> PaperPortfolio:
+    with paper_cycle_lock:
+        account = account_registry.active_account()
+        prices: dict[str, Candle] = {}
+        for trade in manual_trader.snapshot().open_positions:
+            candles = mt5_bridge.candles(
+                account,
+                trade.symbol,
+                trade.timeframe,
+                80,
+            )
+            if candles:
+                prices[trade.symbol] = candles[-1]
+        return manual_trader.process_manual_cycle(
+            prices,
+            account.id if account else "",
+        )
+
+
 def run_jdub_cycle(force: bool = False) -> PaperPortfolio:
     with paper_cycle_lock:
         account = account_registry.active_account()
@@ -624,9 +659,24 @@ async def extreme_scanning_loop() -> None:
         await asyncio.sleep(settings.extreme_scan_interval_seconds)
 
 
+async def manual_trading_loop() -> None:
+    await asyncio.sleep(5)
+    while True:
+        if manual_trader.enabled:
+            try:
+                await asyncio.get_running_loop().run_in_executor(
+                    paper_cycle_executor,
+                    run_manual_cycle,
+                )
+            except Exception as exc:
+                manual_trader.record_error(f"Manual trading bot cycle failed: {exc}")
+        await asyncio.sleep(manual_trader.cycle_interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     paper_task = asyncio.create_task(paper_trading_loop())
+    manual_task = asyncio.create_task(manual_trading_loop())
     jdub_task = asyncio.create_task(jdub_trading_loop())
     candlestick_main_task = asyncio.create_task(
         candlestick_trading_loop(candlestick_trader, "Candlestick Main BUY + SELL Bot", 24)
@@ -646,6 +696,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         paper_task.cancel()
+        manual_task.cancel()
         jdub_task.cancel()
         candlestick_main_task.cancel()
         candlestick_buy_task.cancel()
@@ -655,6 +706,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         extreme_task.cancel()
         with suppress(asyncio.CancelledError):
             await paper_task
+        with suppress(asyncio.CancelledError):
+            await manual_task
         with suppress(asyncio.CancelledError):
             await jdub_task
         with suppress(asyncio.CancelledError):
@@ -868,6 +921,11 @@ def paper_portfolio() -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(paper_trader.snapshot())
 
 
+@app.get("/paper/manual/portfolio", response_model=PaperPortfolioDTO)
+def manual_paper_portfolio() -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(manual_trader.snapshot())
+
+
 @app.get("/paper/jdub/portfolio", response_model=PaperPortfolioDTO)
 def jdub_paper_portfolio() -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(jdub_trader.snapshot())
@@ -915,6 +973,17 @@ def control_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
         timeframe=payload.timeframe,
         timeframe_mode=payload.timeframe_mode,
         minimum_opportunity_score=payload.minimum_opportunity_score,
+        max_open_positions=payload.max_open_positions,
+    )
+    return PaperPortfolioDTO.model_validate(portfolio)
+
+
+@app.post("/paper/manual/control", response_model=PaperPortfolioDTO)
+def control_manual_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
+    portfolio = manual_trader.update_control(
+        enabled=payload.enabled,
+        timeframe=payload.timeframe,
+        timeframe_mode="manual" if payload.timeframe is not None else None,
         max_open_positions=payload.max_open_positions,
     )
     return PaperPortfolioDTO.model_validate(portfolio)
@@ -1009,6 +1078,11 @@ def cycle_paper_trading(force: bool = Query(default=False)) -> PaperPortfolioDTO
     return PaperPortfolioDTO.model_validate(run_paper_cycle(force))
 
 
+@app.post("/paper/manual/cycle", response_model=PaperPortfolioDTO)
+def cycle_manual_paper_trading() -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(run_manual_cycle())
+
+
 @app.post("/paper/manual/open", response_model=PaperPortfolioDTO)
 def open_manual_paper_trade(payload: ManualPaperTradeRequestDTO) -> PaperPortfolioDTO:
     account = account_registry.active_account()
@@ -1023,7 +1097,7 @@ def open_manual_paper_trade(payload: ManualPaperTradeRequestDTO) -> PaperPortfol
         entry = candles[-1].close
     try:
         return PaperPortfolioDTO.model_validate(
-            paper_trader.place_manual_order(
+            manual_trader.place_manual_order(
                 symbol=payload.symbol,
                 direction=Direction(payload.direction),
                 volume=payload.volume,
@@ -1168,6 +1242,46 @@ def update_paper_position_note(
         )
     except KeyError as error:
         raise HTTPException(status_code=404, detail="Virtual trade was not found.") from error
+
+
+@app.post("/paper/manual/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
+def close_manual_paper_position(trade_id: str) -> PaperPortfolioDTO:
+    trade = next(
+        (item for item in manual_trader.snapshot().open_positions if item.id == trade_id),
+        None,
+    )
+    if trade is None:
+        raise HTTPException(status_code=404, detail="Open manual virtual position not found.")
+    candles = mt5_bridge.candles(
+        account_registry.active_account(),
+        trade.symbol,
+        trade.timeframe,
+        80,
+    )
+    if not candles:
+        raise HTTPException(
+            status_code=409,
+            detail="A verified current MT5 price is required to close the manual virtual position.",
+        )
+    return PaperPortfolioDTO.model_validate(
+        manual_trader.close_trade(trade_id, candles[-1].close)
+    )
+
+
+@app.post("/paper/manual/positions/{trade_id}/note", response_model=PaperPortfolioDTO)
+def update_manual_paper_position_note(
+    trade_id: str,
+    payload: PaperTradeNoteRequestDTO,
+) -> PaperPortfolioDTO:
+    try:
+        return PaperPortfolioDTO.model_validate(
+            manual_trader.update_trade_note(trade_id, payload.note)
+        )
+    except KeyError as error:
+        raise HTTPException(
+            status_code=404,
+            detail="Manual virtual trade was not found.",
+        ) from error
 
 
 @app.post("/paper/jdub/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
@@ -1356,6 +1470,13 @@ def reset_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
     if payload.confirmation != "RESET PAPER ACCOUNT":
         raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
     return PaperPortfolioDTO.model_validate(paper_trader.reset())
+
+
+@app.post("/paper/manual/reset", response_model=PaperPortfolioDTO)
+def reset_manual_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
+    if payload.confirmation != "RESET PAPER ACCOUNT":
+        raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
+    return PaperPortfolioDTO.model_validate(manual_trader.reset())
 
 
 @app.post("/paper/jdub/reset", response_model=PaperPortfolioDTO)

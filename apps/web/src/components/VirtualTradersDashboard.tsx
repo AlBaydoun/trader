@@ -12,6 +12,7 @@ import {
   Target,
   CandlestickChart,
   GitBranch,
+  MousePointer2,
   TrendingDown,
   TrendingUp
 } from "lucide-react";
@@ -19,6 +20,7 @@ import type { PaperPortfolio, StrategyLabSnapshot } from "../types";
 
 interface VirtualTradersDashboardProps {
   paper?: PaperPortfolio;
+  manual?: PaperPortfolio;
   jdub?: PaperPortfolio;
   rigorgate?: PaperPortfolio;
   extreme?: PaperPortfolio;
@@ -33,7 +35,7 @@ interface VirtualTradersDashboardProps {
 interface TraderCardProps {
   name: string;
   subtitle: string;
-  accent: "market" | "jdub" | "rigorgate" | "extreme" | "candlestick" | "candlestick-buy" | "candlestick-sell" | "video-strategy";
+  accent: "market" | "manual" | "jdub" | "rigorgate" | "extreme" | "candlestick" | "candlestick-buy" | "candlestick-sell" | "video-strategy";
   icon: ReactNode;
   panelId: string;
   portfolio?: PaperPortfolio;
@@ -42,6 +44,7 @@ interface TraderCardProps {
 
 export function VirtualTradersDashboard({
   paper,
+  manual,
   jdub,
   rigorgate,
   extreme,
@@ -52,7 +55,7 @@ export function VirtualTradersDashboard({
   strategyLab,
   onOpenPanel
 }: VirtualTradersDashboardProps) {
-  const portfolios = [paper, jdub, rigorgate, extreme, candlestick, candlestickBuy, candlestickSell, videoStrategy].filter(
+  const portfolios = [paper, manual, jdub, rigorgate, extreme, candlestick, candlestickBuy, candlestickSell, videoStrategy].filter(
     (portfolio): portfolio is PaperPortfolio => Boolean(portfolio)
   );
   const totalEquity = portfolios.length
@@ -127,6 +130,15 @@ export function VirtualTradersDashboard({
           icon={<BarChart3 size={17} />}
           panelId="paper-trading"
           portfolio={paper}
+          onOpenPanel={onOpenPanel}
+        />
+        <TraderCard
+          name="Manual Trading Bot"
+          subtitle="Search any MT5 symbol and manage paper entries yourself"
+          accent="manual"
+          icon={<MousePointer2 size={17} />}
+          panelId="manual-trading"
+          portfolio={manual}
           onOpenPanel={onOpenPanel}
         />
         <TraderCard

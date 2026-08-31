@@ -15,8 +15,8 @@ This project is **not** a profit guarantee and does not ship with live trading e
 - Persistent virtual trading ledger that opens, marks, closes, and reports every eligible paper
   position with entry, exit, fees, risk, R-multiple, MFE/MAE, equity, decision history, and
   paper-only learning from closed-trade outcomes.
-- Manual paper-trade controls on the main Virtual Trading panel with BUY/SELL entry, configurable
-  volume, timeframe, stop-loss, take-profit, and a persistent note for each trade.
+- Separate Manual Trading Bot with its own paper ledger, full MT5 symbol search, live chart refresh,
+  manual position monitoring, and independent start/pause controls.
 - Separate persistent Extreme Virtual Trading ledger for confirmed RSI(1) 85/15 plus rejection,
   RSI(3/7), momentum, MACD histogram, and EMA agreement, including signal-time price, modeled
   fill, live virtual P/L, exit result, and learning.

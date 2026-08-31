@@ -13,6 +13,7 @@ import type {
   PaperControl,
   PaperPortfolio,
   ScanResponse,
+  Signal,
   Status,
   StrategyDefinition,
   StrategyLabSnapshot
@@ -74,6 +75,10 @@ export function getCandles(symbol: string, timeframe: string): Promise<Candle[]>
   return getJson<Candle[]>(`/candles/${encodeURIComponent(symbol)}?timeframe=${timeframe}&limit=240`);
 }
 
+export function getSignal(symbol: string, timeframe: string): Promise<Signal> {
+  return getJson<Signal>(`/signals/${encodeURIComponent(symbol)}?timeframe=${timeframe}`);
+}
+
 export function scan(symbols: string[], timeframe: string): Promise<ScanResponse> {
   const query = encodeURIComponent(symbols.join(","));
   return getJson<ScanResponse>(`/scan?symbols=${query}&timeframe=${timeframe}`);
@@ -84,8 +89,9 @@ export function getNewsAnalysis(symbols: string[]): Promise<NewsFeed> {
   return getJson<NewsFeed>(`/news/analysis?symbols=${query}`);
 }
 
-export function getMarketSymbols(): Promise<MarketSymbol[]> {
-  return getJson<MarketSymbol[]>("/market/symbols?limit=2000");
+export function getMarketSymbols(search = "", limit = 2000): Promise<MarketSymbol[]> {
+  const query = search.trim() ? `&search=${encodeURIComponent(search.trim())}` : "";
+  return getJson<MarketSymbol[]>(`/market/symbols?limit=${limit}${query}`);
 }
 
 export function scanWholeMarket(timeframe: string, force = false): Promise<MarketScan> {
@@ -100,6 +106,10 @@ export function getStrategy(): Promise<StrategyDefinition> {
 
 export function getPaperPortfolio(): Promise<PaperPortfolio> {
   return getJson<PaperPortfolio>("/paper/portfolio");
+}
+
+export function getManualPaperPortfolio(): Promise<PaperPortfolio> {
+  return getJson<PaperPortfolio>("/paper/manual/portfolio");
 }
 
 export function getJdubPaperPortfolio(): Promise<PaperPortfolio> {
@@ -144,8 +154,31 @@ export function updatePaperControl(control: PaperControl): Promise<PaperPortfoli
   return sendJson<PaperPortfolio>("/paper/control", control);
 }
 
+export function updateManualPaperControl(control: PaperControl): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>("/paper/manual/control", control);
+}
+
 export function openManualPaperTrade(trade: ManualPaperTradeRequest): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>("/paper/manual/open", trade);
+}
+
+export function runManualPaperCycle(): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>("/paper/manual/cycle");
+}
+
+export function closeManualPaperPosition(tradeId: string): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>(`/paper/manual/positions/${encodeURIComponent(tradeId)}/close`);
+}
+
+export function updateManualPaperTradeNote(tradeId: string, note: string): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>(
+    `/paper/manual/positions/${encodeURIComponent(tradeId)}/note`,
+    { note }
+  );
+}
+
+export function resetManualPaperPortfolio(): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>("/paper/manual/reset", { confirmation: "RESET PAPER ACCOUNT" });
 }
 
 export function updatePaperTradeNote(tradeId: string, note: string): Promise<PaperPortfolio> {

@@ -38,6 +38,15 @@ class Settings(BaseSettings):
     paper_adaptive_learning_enabled: bool = True
     paper_learning_min_samples: int = Field(default=8, ge=3, le=1000)
 
+    manual_paper_auto_enabled: bool = False
+    manual_paper_state_file: str = "../../data/manual-paper-trading.json"
+    manual_paper_timeframe: str = Field(default="1m", pattern="^(1m|5m|15m|1h|4h|1d)$")
+    manual_paper_starting_balance: float = Field(default=10000.0, gt=0)
+    manual_paper_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
+    manual_paper_max_open_positions: int = Field(default=50, ge=1, le=200)
+    manual_paper_cycle_interval_seconds: int = Field(default=15, ge=5, le=3600)
+    manual_paper_max_position_minutes: int = Field(default=43200, ge=1, le=43200)
+
     rigorgate_paper_auto_enabled: bool = True
     rigorgate_paper_state_file: str = "../../data/rigorgate-paper.json"
     rigorgate_paper_timeframe_mode: str = Field(default="auto", pattern="^(auto|manual)$")

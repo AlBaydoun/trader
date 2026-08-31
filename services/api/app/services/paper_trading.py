@@ -434,6 +434,49 @@ class PaperTradingService:
             self._save()
             return self.snapshot()
 
+    def process_manual_cycle(
+        self,
+        prices: dict[str, Candle],
+        source_account_id: str,
+        now: datetime | None = None,
+    ) -> PaperPortfolio:
+        """Mark operator-opened positions and enforce their protective levels."""
+        with self._lock:
+            cycle_time = now or datetime.now(UTC)
+            cycle_id = f"manual-cycle-{uuid4().hex[:10]}"
+            self.source_account_id = source_account_id
+            self.market_source = "mt5" if prices else "waiting"
+            self.scanned_symbols = len(prices)
+            self.last_scan_at = cycle_time
+            self.opened_last_cycle = 0
+            self.closed_last_cycle = 0
+
+            for trade in list(self._open_trades()):
+                candle = prices.get(trade.symbol)
+                if candle is None:
+                    continue
+                self._mark_trade(trade, candle)
+                exit_price, exit_reason = self._exit_trigger(trade, candle, cycle_time)
+                if exit_price is not None and exit_reason is not None:
+                    self._close_trade(trade, exit_price, exit_reason, cycle_time, cycle_id)
+
+            self.cycle_count += 1
+            self.last_cycle_at = cycle_time
+            self.last_error = ""
+            self._decision(
+                cycle_id=cycle_id,
+                action="cycle",
+                outcome="completed",
+                reason=(
+                    f"Live monitor checked {len(prices)} symbols and closed "
+                    f"{self.closed_last_cycle} manual positions on protection or time rules."
+                ),
+            )
+            self._append_equity_point(cycle_time)
+            self._trim()
+            self._save()
+            return self.snapshot()
+
     def process_cycle(
         self,
         scan: MarketScanResult,

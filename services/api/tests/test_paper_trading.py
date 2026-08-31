@@ -162,6 +162,31 @@ def test_manual_trade_requires_directional_protection(tmp_path: Path) -> None:
         )
 
 
+def test_manual_monitor_marks_and_closes_at_protection(tmp_path: Path) -> None:
+    service = make_service(tmp_path / "manual-monitor.json")
+    opened_at = datetime(2026, 1, 1, 10, tzinfo=UTC)
+    opened = service.place_manual_order(
+        symbol="XAUUSD",
+        direction=Direction.buy,
+        volume=1,
+        entry=100,
+        stop_loss=99,
+        take_profit=102,
+        timeframe="1m",
+    )
+    trade = opened.open_positions[0]
+
+    result = service.process_manual_cycle(
+        {"XAUUSD": candle(low=100, high=103, close=102, now=opened_at)},
+        "test-account",
+        opened_at,
+    )
+
+    assert result.metrics.open_positions == 0
+    assert result.closed_trades[0].id == trade.id
+    assert result.closed_trades[0].exit_reason == "take_profit"
+
+
 def test_timeframe_selection_mode_is_persisted(tmp_path: Path) -> None:
     path = tmp_path / "paper.json"
     service = make_service(path)

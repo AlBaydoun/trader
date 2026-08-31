@@ -134,24 +134,6 @@ Use the `Paper` button in the header to open the virtual results section. It sho
 and clears the virtual ledger only. The auto toggle pauses or resumes future virtual cycles without
 changing historical results.
 
-## Manual Virtual Trades
-
-The main `Virtual Trading` panel includes a `Manual paper trade` form. It is always paper-only and
-does not submit anything to MT5 or JustMarkets. Use the header toggle to pause or resume the
-automatic scanner, then use the form when you want to control an entry yourself. You can choose:
-
-- Symbol and BUY or SELL direction.
-- Volume and execution timeframe.
-- Entry price, or leave it blank to use the latest available scanned close.
-- Stop-loss and take-profit. The service rejects levels on the wrong side of the entry.
-- A free-form note describing the setup, decision, or review.
-
-Manual trades use the same virtual mark-to-market, stop/target, close, equity, daily-report, and
-learning lifecycle as automatic paper trades. Their source is recorded as `manual`, and notes can
-be edited from both the Open and History tables. Notes are persisted with the paper ledger and
-survive API restarts. The corresponding API routes are `POST /paper/manual/open` and
-`POST /paper/positions/{trade_id}/note`.
-
 ## Safety Boundary
 
 The paper service is separate from the live broker adapter. The API's live trading lock still
@@ -160,3 +142,24 @@ approval. The paper engine does not bypass or weaken those controls.
 
 Virtual fills are modeled from observed candle prices, so they are not a substitute for broker
 execution quality, spread behavior, slippage, latency, or a validated backtest.
+
+## Manual Trading Bot
+
+`Manual Trading Bot` is a separate paper-only ledger for operator-controlled entries. It does not
+open positions from the automatic strategy and does not share the main `Virtual Trading` history.
+The bot is paused by default. Turn on `Monitoring` when you want its open positions to be marked
+from live MT5 candles and automatically closed when their configured stop-loss, take-profit, or
+time limit is reached. Turning monitoring off pauses those automatic marks and exits; it does not
+delete trades or prevent you from opening or closing paper positions from the panel.
+
+Its chart searches the full tradeable symbol catalog exposed by the connected MT5 terminal. Search
+by symbol or description, select a result, and the chart refreshes every 10 seconds. The chart
+shows whether its candles came from MT5 or the demo fallback. A typed symbol can also be submitted
+directly when the catalog is unavailable, but live monitoring requires a verified MT5 connection.
+The selected timeframe is independent of the main chart grid and is stored in the manual ledger.
+
+The manual ledger is stored at `MANUAL_PAPER_STATE_FILE` (default
+`../../data/manual-paper-trading.json`). Its portfolio, notes, results, and monitoring state
+survive API restarts. The API routes are `GET /paper/manual/portfolio`, `POST /paper/manual/open`,
+`POST /paper/manual/control`, `POST /paper/manual/cycle`, and the matching manual position close,
+note, and reset routes.
