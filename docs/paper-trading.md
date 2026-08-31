@@ -45,26 +45,30 @@ RigorGate defaults to automatic selection on a fresh ledger, with 15m as its ini
 timeframe. Its Timeframe control supports 1m, 5m, 15m, 1h, 4h, and 1d. Changing the mode or forced
 timeframe in the panel persists the choice across API restarts.
 
-## Candlestick Pattern Bot
+## Candlestick Engulfing Bots
 
-`Candlestick Pattern Bot` is a separate paper-only ledger. It defaults to M15 when a new ledger is
-created, then automatically compares the configured timeframe set unless Manual mode is selected.
-It scans every tradeable instrument exposed by the active MT5 terminal and only creates a paper
-candidate for a directional named pattern. The entry score combines the pattern strength with
-EMA(20)/EMA(50) trend agreement, candle body quality, quote freshness, spread, and an ATR-based
-stop/target model. A Doji is recorded as context and does not open a trade by itself.
+The workstation now exposes two independent paper-only ledgers:
 
-When the bot is set to Manual M15, a confirmed green Bullish Engulfing on the latest closed candle
-is prioritized as a BUY candidate, while a confirmed red Bearish Engulfing is prioritized as a
-SELL candidate. A BUY receives a stop below the latest two candle lows and a target above entry;
-a SELL receives a stop above the latest two candle highs and a target below entry. Both use an ATR
-buffer and a 1.35R target. Active quotes, spread, risk limits, position limits, and the paper-only
-execution boundary still apply; the pattern is not a guarantee of profit.
+- `Bullish Engulfing BUY Bot` scans the selected timeframe for a confirmed green Bullish Engulfing
+  candle and opens BUY positions only.
+- `Bearish Engulfing SELL Bot` scans the selected timeframe for a confirmed red Bearish Engulfing
+  candle and opens SELL positions only.
 
-Its history, daily reports, learning lessons, decisions, and equity curve are isolated at
-`CANDLESTICK_PAPER_STATE_FILE`. The panel shows the detected pattern in each trade's signal
-reasons, so a result can be audited after exit instead of treating the pattern label as a promise
-of a reversal.
+Both bots default to automatic timeframe selection, with M15 as the initial timeframe, and scan
+every tradeable instrument exposed by the active MT5 terminal. Each bot has its own enable switch,
+timeframe mode, score threshold, position limit, open positions, closed history, daily reports,
+learning lessons, decisions, and equity curve. Their state files are
+`CANDLESTICK_BUY_PAPER_STATE_FILE` and `CANDLESTICK_SELL_PAPER_STATE_FILE`, so results are never
+mixed.
+
+A BUY receives a stop below the latest two candle lows and a target above entry; a SELL receives a
+stop above the latest two candle highs and a target below entry. Both use an ATR buffer and a 1.35R
+target. Active quotes, spread, risk limits, position limits, and the paper-only execution boundary
+still apply. These pattern rules are not a guarantee of profit.
+
+The original combined `Candlestick Pattern Bot` API and `CANDLESTICK_PAPER_STATE_FILE` remain
+available for compatibility and are not used by the two new dashboard bots. Existing combined-bot
+history is preserved in its original ledger rather than silently copied into either new bot.
 
 ## Extreme Virtual Trading
 

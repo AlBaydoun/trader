@@ -10,8 +10,8 @@ import {
   ScanLine,
   ShieldCheck,
   Target,
-  CandlestickChart,
-  TrendingDown
+  TrendingDown,
+  TrendingUp
 } from "lucide-react";
 import type { PaperPortfolio, StrategyLabSnapshot } from "../types";
 
@@ -20,7 +20,8 @@ interface VirtualTradersDashboardProps {
   jdub?: PaperPortfolio;
   rigorgate?: PaperPortfolio;
   extreme?: PaperPortfolio;
-  candlestick?: PaperPortfolio;
+  candlestickBuy?: PaperPortfolio;
+  candlestickSell?: PaperPortfolio;
   strategyLab?: StrategyLabSnapshot;
   onOpenPanel: (panelId: string) => void;
 }
@@ -28,7 +29,7 @@ interface VirtualTradersDashboardProps {
 interface TraderCardProps {
   name: string;
   subtitle: string;
-  accent: "market" | "jdub" | "rigorgate" | "extreme" | "candlestick";
+  accent: "market" | "jdub" | "rigorgate" | "extreme" | "candlestick-buy" | "candlestick-sell";
   icon: ReactNode;
   panelId: string;
   portfolio?: PaperPortfolio;
@@ -40,11 +41,12 @@ export function VirtualTradersDashboard({
   jdub,
   rigorgate,
   extreme,
-  candlestick,
+  candlestickBuy,
+  candlestickSell,
   strategyLab,
   onOpenPanel
 }: VirtualTradersDashboardProps) {
-  const portfolios = [paper, jdub, rigorgate, extreme, candlestick].filter(
+  const portfolios = [paper, jdub, rigorgate, extreme, candlestickBuy, candlestickSell].filter(
     (portfolio): portfolio is PaperPortfolio => Boolean(portfolio)
   );
   const totalEquity = portfolios.length
@@ -149,12 +151,21 @@ export function VirtualTradersDashboard({
           onOpenPanel={onOpenPanel}
         />
         <TraderCard
-          name="Candlestick Pattern Bot"
-          subtitle="M15 pattern-recognition paper strategy"
-          accent="candlestick"
-          icon={<CandlestickChart size={17} />}
-          panelId="candlestick-trading"
-          portfolio={candlestick}
+          name="Bullish Engulfing BUY Bot"
+          subtitle="Bullish engulfing only · virtual BUY entries"
+          accent="candlestick-buy"
+          icon={<TrendingUp size={17} />}
+          panelId="candlestick-buy-trading"
+          portfolio={candlestickBuy}
+          onOpenPanel={onOpenPanel}
+        />
+        <TraderCard
+          name="Bearish Engulfing SELL Bot"
+          subtitle="Bearish engulfing only · virtual SELL entries"
+          accent="candlestick-sell"
+          icon={<TrendingDown size={17} />}
+          panelId="candlestick-sell-trading"
+          portfolio={candlestickSell}
           onOpenPanel={onOpenPanel}
         />
         <StrategyLabCard snapshot={strategyLab} onOpenPanel={onOpenPanel} />

@@ -214,3 +214,38 @@ def test_m15_bearish_engulfing_opens_sell_with_automatic_sl_and_tp(tmp_path: Pat
     assert trade.stop_loss is not None and trade.stop_loss > trade.entry_price
     assert trade.take_profit is not None and trade.take_profit < trade.entry_price
     assert "Bearish engulfing" in trade.reasons[0]
+
+
+def test_directional_engulfing_bot_does_not_open_the_other_side(tmp_path: Path) -> None:
+    ledger = PaperTradingService(
+        str(tmp_path / "candlestick-buy-only.json"),
+        enabled=True,
+        starting_balance=10000,
+        risk_per_trade_pct=0.05,
+        max_open_positions=3,
+        minimum_opportunity_score=60,
+        commission_bps=1,
+        slippage_bps=0,
+        cycle_interval_seconds=60,
+        max_position_minutes=240,
+        timeframe_mode="manual",
+        timeframe="15m",
+    )
+    bot = CandlestickPatternBotService(
+        ledger,
+        PatternBridge(bearish_engulfing_history()),
+        pattern_id="bullish-engulfing",
+        bot_name="Bullish Engulfing BUY Bot",
+    )
+    account = BrokerAccountProfile(
+        id="test-account",
+        provider="JustMarkets",
+        login="1000000002",
+        server="JustMarkets-Live",
+        account_type="Standard",
+    )
+
+    portfolio = bot.process_cycle(account, max_symbols=10, force=True)
+
+    assert portfolio.metrics.open_positions == 0
+    assert portfolio.metrics.closed_trades == 0

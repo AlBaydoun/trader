@@ -218,6 +218,56 @@ candlestick_trader = CandlestickPatternBotService(
     mt5_bridge,
     timeframe_options=settings.paper_timeframe_options,
 )
+candlestick_buy_trader = CandlestickPatternBotService(
+    PaperTradingService(
+        settings.candlestick_buy_paper_state_file,
+        enabled=settings.candlestick_buy_paper_auto_enabled,
+        timeframe_mode=(
+            "auto" if settings.candlestick_buy_paper_timeframe_mode == "auto" else "manual"
+        ),
+        timeframe=settings.candlestick_buy_paper_timeframe,
+        starting_balance=settings.candlestick_buy_paper_starting_balance,
+        risk_per_trade_pct=settings.candlestick_buy_paper_risk_per_trade_pct,
+        max_open_positions=settings.candlestick_buy_paper_max_open_positions,
+        minimum_opportunity_score=settings.candlestick_buy_paper_min_opportunity_score,
+        commission_bps=settings.paper_commission_bps,
+        slippage_bps=settings.paper_slippage_bps,
+        cycle_interval_seconds=settings.candlestick_buy_paper_cycle_interval_seconds,
+        max_position_minutes=settings.candlestick_buy_paper_max_position_minutes,
+        adaptive_learning_enabled=settings.paper_adaptive_learning_enabled,
+        learning_min_samples=settings.paper_learning_min_samples,
+        trade_source="candlestick-bullish-buy-virtual",
+    ),
+    mt5_bridge,
+    timeframe_options=settings.paper_timeframe_options,
+    pattern_id="bullish-engulfing",
+    bot_name="Bullish Engulfing BUY Bot",
+)
+candlestick_sell_trader = CandlestickPatternBotService(
+    PaperTradingService(
+        settings.candlestick_sell_paper_state_file,
+        enabled=settings.candlestick_sell_paper_auto_enabled,
+        timeframe_mode=(
+            "auto" if settings.candlestick_sell_paper_timeframe_mode == "auto" else "manual"
+        ),
+        timeframe=settings.candlestick_sell_paper_timeframe,
+        starting_balance=settings.candlestick_sell_paper_starting_balance,
+        risk_per_trade_pct=settings.candlestick_sell_paper_risk_per_trade_pct,
+        max_open_positions=settings.candlestick_sell_paper_max_open_positions,
+        minimum_opportunity_score=settings.candlestick_sell_paper_min_opportunity_score,
+        commission_bps=settings.paper_commission_bps,
+        slippage_bps=settings.paper_slippage_bps,
+        cycle_interval_seconds=settings.candlestick_sell_paper_cycle_interval_seconds,
+        max_position_minutes=settings.candlestick_sell_paper_max_position_minutes,
+        adaptive_learning_enabled=settings.paper_adaptive_learning_enabled,
+        learning_min_samples=settings.paper_learning_min_samples,
+        trade_source="candlestick-bearish-sell-virtual",
+    ),
+    mt5_bridge,
+    timeframe_options=settings.paper_timeframe_options,
+    pattern_id="bearish-engulfing",
+    bot_name="Bearish Engulfing SELL Bot",
+)
 strategy_lab = ScalpStrategyLabService(
     [
         StrategyLabMember(
@@ -479,25 +529,27 @@ async def jdub_trading_loop() -> None:
         await asyncio.sleep(jdub_trader.ledger.cycle_interval_seconds)
 
 
-async def candlestick_trading_loop() -> None:
-    await asyncio.sleep(24)
+async def candlestick_trading_loop(
+    trader: CandlestickPatternBotService,
+    label: str,
+    initial_delay: int,
+) -> None:
+    await asyncio.sleep(initial_delay)
     while True:
-        if candlestick_trader.enabled:
+        if trader.enabled:
             try:
                 await asyncio.get_running_loop().run_in_executor(
                     paper_cycle_executor,
                     partial(
-                        candlestick_trader.process_cycle,
+                        trader.process_cycle,
                         account_registry.active_account(),
                         settings.market_scan_max_symbols,
                         settings.market_scan_max_symbols,
                     ),
                 )
             except Exception as exc:
-                candlestick_trader.ledger.record_error(
-                    f"Candlestick Pattern Bot virtual cycle failed: {exc}"
-                )
-        await asyncio.sleep(candlestick_trader.ledger.cycle_interval_seconds)
+                trader.ledger.record_error(f"{label} virtual cycle failed: {exc}")
+        await asyncio.sleep(trader.ledger.cycle_interval_seconds)
 
 
 async def rigorgate_trading_loop() -> None:
@@ -534,7 +586,12 @@ async def extreme_scanning_loop() -> None:
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     paper_task = asyncio.create_task(paper_trading_loop())
     jdub_task = asyncio.create_task(jdub_trading_loop())
-    candlestick_task = asyncio.create_task(candlestick_trading_loop())
+    candlestick_buy_task = asyncio.create_task(
+        candlestick_trading_loop(candlestick_buy_trader, "Bullish Engulfing BUY Bot", 24)
+    )
+    candlestick_sell_task = asyncio.create_task(
+        candlestick_trading_loop(candlestick_sell_trader, "Bearish Engulfing SELL Bot", 30)
+    )
     rigorgate_task = asyncio.create_task(rigorgate_trading_loop())
     extreme_task = asyncio.create_task(extreme_scanning_loop())
     try:
@@ -542,7 +599,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     finally:
         paper_task.cancel()
         jdub_task.cancel()
-        candlestick_task.cancel()
+        candlestick_buy_task.cancel()
+        candlestick_sell_task.cancel()
         rigorgate_task.cancel()
         extreme_task.cancel()
         with suppress(asyncio.CancelledError):
@@ -550,7 +608,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         with suppress(asyncio.CancelledError):
             await jdub_task
         with suppress(asyncio.CancelledError):
-            await candlestick_task
+            await candlestick_buy_task
+        with suppress(asyncio.CancelledError):
+            await candlestick_sell_task
         with suppress(asyncio.CancelledError):
             await rigorgate_task
         with suppress(asyncio.CancelledError):
@@ -774,6 +834,16 @@ def candlestick_paper_portfolio() -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(candlestick_trader.snapshot())
 
 
+@app.get("/paper/candlestick/buy/portfolio", response_model=PaperPortfolioDTO)
+def candlestick_buy_paper_portfolio() -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(candlestick_buy_trader.snapshot())
+
+
+@app.get("/paper/candlestick/sell/portfolio", response_model=PaperPortfolioDTO)
+def candlestick_sell_paper_portfolio() -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(candlestick_sell_trader.snapshot())
+
+
 @app.get("/paper/strategies", response_model=StrategyLabDTO)
 def paper_strategy_lab() -> StrategyLabDTO:
     return StrategyLabDTO.model_validate(strategy_lab.snapshot())
@@ -839,6 +909,30 @@ def control_candlestick_paper_trading(payload: PaperControlRequestDTO) -> PaperP
     return PaperPortfolioDTO.model_validate(portfolio)
 
 
+@app.post("/paper/candlestick/buy/control", response_model=PaperPortfolioDTO)
+def control_candlestick_buy_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
+    portfolio = candlestick_buy_trader.update_control(
+        enabled=payload.enabled,
+        timeframe=payload.timeframe,
+        timeframe_mode=payload.timeframe_mode,
+        minimum_opportunity_score=payload.minimum_opportunity_score,
+        max_open_positions=payload.max_open_positions,
+    )
+    return PaperPortfolioDTO.model_validate(portfolio)
+
+
+@app.post("/paper/candlestick/sell/control", response_model=PaperPortfolioDTO)
+def control_candlestick_sell_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
+    portfolio = candlestick_sell_trader.update_control(
+        enabled=payload.enabled,
+        timeframe=payload.timeframe,
+        timeframe_mode=payload.timeframe_mode,
+        minimum_opportunity_score=payload.minimum_opportunity_score,
+        max_open_positions=payload.max_open_positions,
+    )
+    return PaperPortfolioDTO.model_validate(portfolio)
+
+
 @app.post("/paper/cycle", response_model=PaperPortfolioDTO)
 def cycle_paper_trading(force: bool = Query(default=False)) -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(run_paper_cycle(force))
@@ -863,6 +957,30 @@ def cycle_extreme_paper_trading(force: bool = Query(default=True)) -> PaperPortf
 def cycle_candlestick_paper_trading(force: bool = Query(default=True)) -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(
         candlestick_trader.process_cycle(
+            account_registry.active_account(),
+            settings.market_scan_max_symbols,
+            settings.market_scan_max_symbols,
+            force=force,
+        )
+    )
+
+
+@app.post("/paper/candlestick/buy/cycle", response_model=PaperPortfolioDTO)
+def cycle_candlestick_buy_paper_trading(force: bool = Query(default=True)) -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(
+        candlestick_buy_trader.process_cycle(
+            account_registry.active_account(),
+            settings.market_scan_max_symbols,
+            settings.market_scan_max_symbols,
+            force=force,
+        )
+    )
+
+
+@app.post("/paper/candlestick/sell/cycle", response_model=PaperPortfolioDTO)
+def cycle_candlestick_sell_paper_trading(force: bool = Query(default=True)) -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(
+        candlestick_sell_trader.process_cycle(
             account_registry.active_account(),
             settings.market_scan_max_symbols,
             settings.market_scan_max_symbols,
@@ -1034,6 +1152,54 @@ def close_candlestick_paper_position(trade_id: str) -> PaperPortfolioDTO:
     )
 
 
+@app.post("/paper/candlestick/buy/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
+def close_candlestick_buy_paper_position(trade_id: str) -> PaperPortfolioDTO:
+    position = next(
+        (item for item in candlestick_buy_trader.positions() if item.id == trade_id),
+        None,
+    )
+    if position is None:
+        raise HTTPException(status_code=404, detail="Open bullish virtual position not found.")
+    candles = mt5_bridge.candles(
+        account_registry.active_account(),
+        position.symbol,
+        candlestick_buy_trader.timeframe,
+        80,
+    )
+    if not candles:
+        raise HTTPException(
+            status_code=409,
+            detail="A verified current MT5 price is required to close the bullish position.",
+        )
+    return PaperPortfolioDTO.model_validate(
+        candlestick_buy_trader.close_trade(trade_id, candles[-1].close)
+    )
+
+
+@app.post("/paper/candlestick/sell/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
+def close_candlestick_sell_paper_position(trade_id: str) -> PaperPortfolioDTO:
+    position = next(
+        (item for item in candlestick_sell_trader.positions() if item.id == trade_id),
+        None,
+    )
+    if position is None:
+        raise HTTPException(status_code=404, detail="Open bearish virtual position not found.")
+    candles = mt5_bridge.candles(
+        account_registry.active_account(),
+        position.symbol,
+        candlestick_sell_trader.timeframe,
+        80,
+    )
+    if not candles:
+        raise HTTPException(
+            status_code=409,
+            detail="A verified current MT5 price is required to close the bearish position.",
+        )
+    return PaperPortfolioDTO.model_validate(
+        candlestick_sell_trader.close_trade(trade_id, candles[-1].close)
+    )
+
+
 @app.post("/paper/reset", response_model=PaperPortfolioDTO)
 def reset_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
     if payload.confirmation != "RESET PAPER ACCOUNT":
@@ -1067,6 +1233,20 @@ def reset_candlestick_paper_trading(payload: PaperResetRequestDTO) -> PaperPortf
     if payload.confirmation != "RESET PAPER ACCOUNT":
         raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
     return PaperPortfolioDTO.model_validate(candlestick_trader.reset())
+
+
+@app.post("/paper/candlestick/buy/reset", response_model=PaperPortfolioDTO)
+def reset_candlestick_buy_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
+    if payload.confirmation != "RESET PAPER ACCOUNT":
+        raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
+    return PaperPortfolioDTO.model_validate(candlestick_buy_trader.reset())
+
+
+@app.post("/paper/candlestick/sell/reset", response_model=PaperPortfolioDTO)
+def reset_candlestick_sell_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
+    if payload.confirmation != "RESET PAPER ACCOUNT":
+        raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
+    return PaperPortfolioDTO.model_validate(candlestick_sell_trader.reset())
 
 
 @app.get("/candles/{symbol}", response_model=list[CandleDTO])

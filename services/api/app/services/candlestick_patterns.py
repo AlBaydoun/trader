@@ -35,6 +35,8 @@ class CandlestickPatternBotService:
         *,
         timeframe_options: Sequence[str] = SUPPORTED_TIMEFRAMES,
         target_r_multiple: float = 1.35,
+        pattern_id: str | None = None,
+        bot_name: str | None = None,
     ) -> None:
         self.ledger = ledger
         self.bridge = bridge
@@ -43,6 +45,8 @@ class CandlestickPatternBotService:
             or SUPPORTED_TIMEFRAMES
         )
         self.target_r_multiple = target_r_multiple
+        self.pattern_id = pattern_id
+        self.bot_name = bot_name or self.name
 
     @property
     def enabled(self) -> bool:
@@ -169,7 +173,7 @@ class CandlestickPatternBotService:
             scanned_symbols=len(candles_by_symbol),
             generated_at=now,
             disclaimer=(
-                "Candlestick Pattern Bot is paper-only. It recognizes common formations on the "
+                f"{self.bot_name} is paper-only. It recognizes common formations on the "
                 "latest available candles, then requires trend, volatility, spread, and risk "
                 "checks. A pattern is not a guaranteed reversal or profit signal."
             ),
@@ -188,6 +192,8 @@ class CandlestickPatternBotService:
             return None
         patterns = detect_candlestick_patterns(candles)
         directional = [pattern for pattern in patterns if pattern.direction != Direction.hold]
+        if self.pattern_id is not None:
+            directional = [pattern for pattern in directional if pattern.id == self.pattern_id]
         if not directional:
             return None
         bullish_engulfing = next(
@@ -202,7 +208,9 @@ class CandlestickPatternBotService:
         # This keeps a confirmed red bearish engulfing from being replaced by another
         # formation that happens to share the same closing sequence.
         strongest = (
-            bullish_engulfing
+            directional[0]
+            if self.pattern_id is not None
+            else bullish_engulfing
             if timeframe == "15m" and bullish_engulfing is not None
             else bearish_engulfing
             if timeframe == "15m" and bearish_engulfing is not None
@@ -261,7 +269,11 @@ class CandlestickPatternBotService:
             and quote_age_seconds is not None
             and quote_age_seconds <= 300
         )
-        labels = ", ".join(pattern.label for pattern in patterns)
+        labels = ", ".join(
+            pattern.label
+            for pattern in patterns
+            if self.pattern_id is None or pattern.id == self.pattern_id
+        )
         trend_impact: Literal["bullish", "bearish", "risk"] = (
             impact if trend_agrees else "risk"
         )
@@ -269,7 +281,7 @@ class CandlestickPatternBotService:
             rank=0,
             symbol=symbol,
             description=f"{symbol} {strongest.label}",
-            category=self.name,
+            category=self.bot_name,
             direction=strongest.direction,
             confidence=round(min(0.96, 0.68 + score / 350), 3),
             entry=latest.close,
