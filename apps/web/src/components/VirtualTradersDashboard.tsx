@@ -10,6 +10,7 @@ import {
   ScanLine,
   ShieldCheck,
   Target,
+  CandlestickChart,
   TrendingDown,
   TrendingUp
 } from "lucide-react";
@@ -20,6 +21,7 @@ interface VirtualTradersDashboardProps {
   jdub?: PaperPortfolio;
   rigorgate?: PaperPortfolio;
   extreme?: PaperPortfolio;
+  candlestick?: PaperPortfolio;
   candlestickBuy?: PaperPortfolio;
   candlestickSell?: PaperPortfolio;
   strategyLab?: StrategyLabSnapshot;
@@ -29,7 +31,7 @@ interface VirtualTradersDashboardProps {
 interface TraderCardProps {
   name: string;
   subtitle: string;
-  accent: "market" | "jdub" | "rigorgate" | "extreme" | "candlestick-buy" | "candlestick-sell";
+  accent: "market" | "jdub" | "rigorgate" | "extreme" | "candlestick" | "candlestick-buy" | "candlestick-sell";
   icon: ReactNode;
   panelId: string;
   portfolio?: PaperPortfolio;
@@ -41,12 +43,13 @@ export function VirtualTradersDashboard({
   jdub,
   rigorgate,
   extreme,
+  candlestick,
   candlestickBuy,
   candlestickSell,
   strategyLab,
   onOpenPanel
 }: VirtualTradersDashboardProps) {
-  const portfolios = [paper, jdub, rigorgate, extreme, candlestickBuy, candlestickSell].filter(
+  const portfolios = [paper, jdub, rigorgate, extreme, candlestick, candlestickBuy, candlestickSell].filter(
     (portfolio): portfolio is PaperPortfolio => Boolean(portfolio)
   );
   const totalEquity = portfolios.length
@@ -148,6 +151,15 @@ export function VirtualTradersDashboard({
           icon={<TrendingDown size={17} />}
           panelId="extreme-paper-trading"
           portfolio={extreme}
+          onOpenPanel={onOpenPanel}
+        />
+        <TraderCard
+          name="Candlestick Main BUY + SELL Bot"
+          subtitle="Bullish and bearish engulfing · virtual BUY and SELL"
+          accent="candlestick"
+          icon={<CandlestickChart size={17} />}
+          panelId="candlestick-trading"
+          portfolio={candlestick}
           onOpenPanel={onOpenPanel}
         />
         <TraderCard

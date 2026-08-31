@@ -50,22 +50,22 @@ export function PaperTradingPanel({
     ? "Bullish Engulfing BUY Bot"
     : candlestickSell
       ? "Bearish Engulfing SELL Bot"
-      : "Candlestick Pattern Bot";
+      : "Candlestick Main BUY + SELL Bot";
   const candlestickDescription = candlestickBuy
     ? "Confirmed Bullish Engulfing virtual trades with no real money"
     : candlestickSell
       ? "Confirmed Bearish Engulfing virtual trades with no real money"
-      : "Bullish and bearish candlestick pattern analysis";
+      : "Bullish and bearish engulfing virtual trades with no real money";
   const candlestickRules = candlestickBuy
     ? "Bullish engulfing opens BUY; ATR sets SL and 1.35R sets TP"
     : candlestickSell
       ? "Bearish engulfing opens SELL; ATR sets SL and 1.35R sets TP"
-      : "Engulfing patterns open BUY or SELL; ATR sets SL and 1.35R sets TP";
+      : "Bullish engulfing opens BUY; bearish engulfing opens SELL; ATR sets SL and 1.35R sets TP";
   const candlestickFilter = candlestickBuy
     ? "Bullish engulfing -> BUY"
     : candlestickSell
       ? "Bearish engulfing -> SELL"
-      : "Engulfing -> BUY / SELL";
+      : "Bullish / bearish engulfing -> BUY / SELL";
   const engine = portfolio?.engine;
   const metrics = portfolio?.metrics;
   const panelId = extreme ? "extreme-paper-trading" : jdub ? "jdub-trading" : rigorgate ? "rigorgate-trading" : candlestickBuy ? "candlestick-buy-trading" : candlestickSell ? "candlestick-sell-trading" : candlestick ? "candlestick-trading" : "paper-trading";

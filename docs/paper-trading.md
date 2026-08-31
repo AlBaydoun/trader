@@ -47,28 +47,30 @@ timeframe in the panel persists the choice across API restarts.
 
 ## Candlestick Engulfing Bots
 
-The workstation now exposes two independent paper-only ledgers:
+The workstation now exposes three independent paper-only ledgers:
+
+- `Candlestick Main BUY + SELL Bot` scans for both confirmed green Bullish Engulfing BUY setups
+  and confirmed red Bearish Engulfing SELL setups in one combined portfolio.
 
 - `Bullish Engulfing BUY Bot` scans the selected timeframe for a confirmed green Bullish Engulfing
   candle and opens BUY positions only.
 - `Bearish Engulfing SELL Bot` scans the selected timeframe for a confirmed red Bearish Engulfing
   candle and opens SELL positions only.
 
-Both bots default to automatic timeframe selection, with M15 as the initial timeframe, and scan
-every tradeable instrument exposed by the active MT5 terminal. Each bot has its own enable switch,
-timeframe mode, score threshold, position limit, open positions, closed history, daily reports,
-learning lessons, decisions, and equity curve. Their state files are
-`CANDLESTICK_BUY_PAPER_STATE_FILE` and `CANDLESTICK_SELL_PAPER_STATE_FILE`, so results are never
-mixed.
+All three bots default to automatic timeframe selection, with M15 as the initial timeframe, and
+scan every tradeable instrument exposed by the active MT5 terminal. Each bot has its own enable
+switch, timeframe mode, score threshold, position limit, open positions, closed history, daily
+reports, learning lessons, decisions, and equity curve. Their state files are
+`CANDLESTICK_PAPER_STATE_FILE`, `CANDLESTICK_BUY_PAPER_STATE_FILE`, and
+`CANDLESTICK_SELL_PAPER_STATE_FILE`, so results are never mixed.
 
 A BUY receives a stop below the latest two candle lows and a target above entry; a SELL receives a
 stop above the latest two candle highs and a target below entry. Both use an ATR buffer and a 1.35R
 target. Active quotes, spread, risk limits, position limits, and the paper-only execution boundary
 still apply. These pattern rules are not a guarantee of profit.
 
-The original combined `Candlestick Pattern Bot` API and `CANDLESTICK_PAPER_STATE_FILE` remain
-available for compatibility and are not used by the two new dashboard bots. Existing combined-bot
-history is preserved in its original ledger rather than silently copied into either new bot.
+The combined bot keeps its existing ledger and history in `CANDLESTICK_PAPER_STATE_FILE`; it is now
+the main combined dashboard bot rather than a hidden compatibility service.
 
 ## Extreme Virtual Trading
 

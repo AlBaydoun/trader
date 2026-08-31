@@ -217,6 +217,7 @@ candlestick_trader = CandlestickPatternBotService(
     ),
     mt5_bridge,
     timeframe_options=settings.paper_timeframe_options,
+    bot_name="Candlestick Main BUY + SELL Bot",
 )
 candlestick_buy_trader = CandlestickPatternBotService(
     PaperTradingService(
@@ -586,11 +587,14 @@ async def extreme_scanning_loop() -> None:
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     paper_task = asyncio.create_task(paper_trading_loop())
     jdub_task = asyncio.create_task(jdub_trading_loop())
+    candlestick_main_task = asyncio.create_task(
+        candlestick_trading_loop(candlestick_trader, "Candlestick Main BUY + SELL Bot", 24)
+    )
     candlestick_buy_task = asyncio.create_task(
-        candlestick_trading_loop(candlestick_buy_trader, "Bullish Engulfing BUY Bot", 24)
+        candlestick_trading_loop(candlestick_buy_trader, "Bullish Engulfing BUY Bot", 30)
     )
     candlestick_sell_task = asyncio.create_task(
-        candlestick_trading_loop(candlestick_sell_trader, "Bearish Engulfing SELL Bot", 30)
+        candlestick_trading_loop(candlestick_sell_trader, "Bearish Engulfing SELL Bot", 36)
     )
     rigorgate_task = asyncio.create_task(rigorgate_trading_loop())
     extreme_task = asyncio.create_task(extreme_scanning_loop())
@@ -599,6 +603,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     finally:
         paper_task.cancel()
         jdub_task.cancel()
+        candlestick_main_task.cancel()
         candlestick_buy_task.cancel()
         candlestick_sell_task.cancel()
         rigorgate_task.cancel()
@@ -607,6 +612,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             await paper_task
         with suppress(asyncio.CancelledError):
             await jdub_task
+        with suppress(asyncio.CancelledError):
+            await candlestick_main_task
         with suppress(asyncio.CancelledError):
             await candlestick_buy_task
         with suppress(asyncio.CancelledError):

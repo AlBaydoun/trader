@@ -22,6 +22,7 @@ import {
   getJdubPaperPortfolio,
   getRigorGatePaperPortfolio,
   getExtremePaperPortfolio,
+  getCandlestickPaperPortfolio,
   getCandlestickBuyPaperPortfolio,
   getCandlestickSellPaperPortfolio,
   getStrategyLab,
@@ -36,17 +37,20 @@ import {
   closeJdubPaperPosition,
   closeRigorGatePaperPosition,
   closeExtremePaperPosition,
+  closeCandlestickPaperPosition,
   closeCandlestickBuyPaperPosition,
   closeCandlestickSellPaperPosition,
   resetExtremePaperPortfolio,
   resetJdubPaperPortfolio,
   resetRigorGatePaperPortfolio,
   resetPaperPortfolio,
+  resetCandlestickPaperPortfolio,
   resetCandlestickBuyPaperPortfolio,
   resetCandlestickSellPaperPortfolio,
   runJdubPaperCycle,
   runRigorGatePaperCycle,
   runExtremePaperCycle,
+  runCandlestickPaperCycle,
   runCandlestickBuyPaperCycle,
   runCandlestickSellPaperCycle,
   runStrategyLabCycle,
@@ -56,6 +60,7 @@ import {
   updateRigorGatePaperControl,
   updateStrategyLabControl,
   updatePaperControl,
+  updateCandlestickPaperControl,
   updateCandlestickBuyPaperControl,
   updateCandlestickSellPaperControl
 } from "./lib/api";
@@ -122,6 +127,9 @@ export function App() {
   const [extremePaperPortfolio, setExtremePaperPortfolio] = useState<PaperPortfolio>();
   const [extremePaperBusy, setExtremePaperBusy] = useState(false);
   const [extremePaperError, setExtremePaperError] = useState("");
+  const [candlestickPaperPortfolio, setCandlestickPaperPortfolio] = useState<PaperPortfolio>();
+  const [candlestickPaperBusy, setCandlestickPaperBusy] = useState(false);
+  const [candlestickPaperError, setCandlestickPaperError] = useState("");
   const [candlestickBuyPortfolio, setCandlestickBuyPortfolio] = useState<PaperPortfolio>();
   const [candlestickBuyBusy, setCandlestickBuyBusy] = useState(false);
   const [candlestickBuyError, setCandlestickBuyError] = useState("");
@@ -226,10 +234,12 @@ export function App() {
   }, [refreshExtremePaper]);
 
   const refreshCandlestickBots = useCallback(async () => {
-    const [buy, sell] = await Promise.all([
+    const [main, buy, sell] = await Promise.all([
+      getCandlestickPaperPortfolio().catch(() => null),
       getCandlestickBuyPaperPortfolio().catch(() => null),
       getCandlestickSellPaperPortfolio().catch(() => null)
     ]);
+    if (main) setCandlestickPaperPortfolio(main);
     if (buy) setCandlestickBuyPortfolio(buy);
     if (sell) setCandlestickSellPortfolio(sell);
   }, []);
@@ -590,6 +600,55 @@ export function App() {
     }
   }
 
+  async function controlCandlestickMain(control: PaperControl) {
+    setCandlestickPaperBusy(true);
+    setCandlestickPaperError("");
+    try {
+      setCandlestickPaperPortfolio(await updateCandlestickPaperControl(control));
+    } catch (error) {
+      setCandlestickPaperError(error instanceof Error ? error.message : "Candlestick main bot control update failed.");
+    } finally {
+      setCandlestickPaperBusy(false);
+    }
+  }
+
+  async function runCandlestickMainCycle() {
+    setCandlestickPaperBusy(true);
+    setCandlestickPaperError("");
+    try {
+      setCandlestickPaperPortfolio(await runCandlestickPaperCycle(true));
+    } catch (error) {
+      setCandlestickPaperError(error instanceof Error ? error.message : "Candlestick main bot cycle failed.");
+    } finally {
+      setCandlestickPaperBusy(false);
+    }
+  }
+
+  async function closeCandlestickMainPosition(tradeId: string) {
+    setCandlestickPaperBusy(true);
+    setCandlestickPaperError("");
+    try {
+      setCandlestickPaperPortfolio(await closeCandlestickPaperPosition(tradeId));
+    } catch (error) {
+      setCandlestickPaperError(error instanceof Error ? error.message : "Candlestick main position could not close.");
+    } finally {
+      setCandlestickPaperBusy(false);
+    }
+  }
+
+  async function resetCandlestickMainPortfolio() {
+    if (!window.confirm("Reset all Candlestick Main BUY + SELL trades, history, and results?")) return;
+    setCandlestickPaperBusy(true);
+    setCandlestickPaperError("");
+    try {
+      setCandlestickPaperPortfolio(await resetCandlestickPaperPortfolio());
+    } catch (error) {
+      setCandlestickPaperError(error instanceof Error ? error.message : "Candlestick main bot reset failed.");
+    } finally {
+      setCandlestickPaperBusy(false);
+    }
+  }
+
   async function controlCandlestickBuy(control: PaperControl) {
     setCandlestickBuyBusy(true);
     setCandlestickBuyError("");
@@ -830,6 +889,7 @@ export function App() {
         jdub={jdubPaperPortfolio}
         rigorgate={rigorGatePaperPortfolio}
         extreme={extremePaperPortfolio}
+        candlestick={candlestickPaperPortfolio}
         candlestickBuy={candlestickBuyPortfolio}
         candlestickSell={candlestickSellPortfolio}
         strategyLab={strategyLab}
@@ -898,6 +958,17 @@ export function App() {
         onRun={() => void runJdubVirtualCycle()}
         onClose={(tradeId) => void closeJdubVirtualPosition(tradeId)}
         onReset={() => void resetJdubVirtualPortfolio()}
+        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+      />
+      <PaperTradingPanel
+        variant="candlestick"
+        portfolio={candlestickPaperPortfolio}
+        busy={candlestickPaperBusy}
+        error={candlestickPaperError}
+        onControl={(control) => void controlCandlestickMain(control)}
+        onRun={() => void runCandlestickMainCycle()}
+        onClose={(tradeId) => void closeCandlestickMainPosition(tradeId)}
+        onReset={() => void resetCandlestickMainPortfolio()}
         onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
       />
       <PaperTradingPanel
