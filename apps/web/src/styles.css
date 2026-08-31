@@ -2154,6 +2154,10 @@ button:disabled {
   border-top-color: #d6b766;
 }
 
+.dashboard-trader-card.rigorgate {
+  border-top-color: #b8cdf7;
+}
+
 .dashboard-trader-card.extreme {
   border-top-color: #ff8ea0;
 }
@@ -2186,6 +2190,10 @@ button:disabled {
 
 .dashboard-trader-card.jdub .dashboard-card-icon {
   color: #e7c766;
+}
+
+.dashboard-trader-card.rigorgate .dashboard-card-icon {
+  color: #b8cdf7;
 }
 
 .dashboard-trader-card.extreme .dashboard-card-icon {

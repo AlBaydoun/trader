@@ -141,8 +141,8 @@ export function SignalRail({
               <span>Target {activeSignal.take_profit ?? "--"}</span>
             </div>
             <div className="reason-list">
-              {activeSignal.reasons.map((reason) => (
-                <article key={`${reason.category}-${reason.message}`} className={`reason ${reason.impact}`}>
+              {activeSignal.reasons.map((reason, index) => (
+                <article key={`${reason.category}-${reason.message}-${index}`} className={`reason ${reason.impact}`}>
                   <strong>{reason.category}</strong>
                   <p>{reason.message}</p>
                 </article>

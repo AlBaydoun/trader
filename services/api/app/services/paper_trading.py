@@ -233,6 +233,7 @@ class PaperTradingService:
         learning_min_samples: int = 8,
         trade_source: str = "mt5-virtual",
         timeframe_mode: PaperTimeframeMode = "manual",
+        timeframe: str = "1m",
     ) -> None:
         self.state_file = self._resolve_state_file(state_file)
         self.backup_file = self.state_file.with_suffix(f"{self.state_file.suffix}.bak")
@@ -248,7 +249,7 @@ class PaperTradingService:
         self.adaptive_learning_enabled = adaptive_learning_enabled
         self.learning_min_samples = learning_min_samples
         self.trade_source = trade_source
-        self.timeframe = "1m"
+        self.timeframe = timeframe
         self.timeframe_mode = timeframe_mode
         self.trades: list[PaperTrade] = []
         self.decisions: list[PaperDecision] = []

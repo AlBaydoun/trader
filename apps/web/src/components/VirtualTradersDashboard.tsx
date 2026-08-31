@@ -7,6 +7,7 @@ import {
   CircleStop,
   Clock3,
   Layers3,
+  ScanLine,
   ShieldCheck,
   Target,
   TrendingDown
@@ -16,6 +17,7 @@ import type { PaperPortfolio, StrategyLabSnapshot } from "../types";
 interface VirtualTradersDashboardProps {
   paper?: PaperPortfolio;
   jdub?: PaperPortfolio;
+  rigorgate?: PaperPortfolio;
   extreme?: PaperPortfolio;
   strategyLab?: StrategyLabSnapshot;
   onOpenPanel: (panelId: string) => void;
@@ -24,7 +26,7 @@ interface VirtualTradersDashboardProps {
 interface TraderCardProps {
   name: string;
   subtitle: string;
-  accent: "market" | "jdub" | "extreme";
+  accent: "market" | "jdub" | "rigorgate" | "extreme";
   icon: ReactNode;
   panelId: string;
   portfolio?: PaperPortfolio;
@@ -34,11 +36,12 @@ interface TraderCardProps {
 export function VirtualTradersDashboard({
   paper,
   jdub,
+  rigorgate,
   extreme,
   strategyLab,
   onOpenPanel
 }: VirtualTradersDashboardProps) {
-  const portfolios = [paper, jdub, extreme].filter(
+  const portfolios = [paper, jdub, rigorgate, extreme].filter(
     (portfolio): portfolio is PaperPortfolio => Boolean(portfolio)
   );
   const totalEquity = portfolios.length
@@ -80,7 +83,7 @@ export function VirtualTradersDashboard({
           </div>
         </div>
         <div className="trader-dashboard-actions">
-          <span className="dashboard-live-state"><Activity size={13} /> {running} of 3 running</span>
+          <span className="dashboard-live-state"><Activity size={13} /> {running} of {portfolios.length} running</span>
           <button className="icon-text dashboard-jump" type="button" onClick={() => onOpenPanel("paper-trading")}>
             Open ledgers <ChevronRight size={14} />
           </button>
@@ -122,6 +125,15 @@ export function VirtualTradersDashboard({
           icon={<Target size={17} />}
           panelId="jdub-trading"
           portfolio={jdub}
+          onOpenPanel={onOpenPanel}
+        />
+        <TraderCard
+          name="RigorGate"
+          subtitle="Direct BUY / WAIT / SELL evidence-gated paper bot"
+          accent="rigorgate"
+          icon={<ScanLine size={17} />}
+          panelId="rigorgate-trading"
+          portfolio={rigorgate}
           onOpenPanel={onOpenPanel}
         />
         <TraderCard

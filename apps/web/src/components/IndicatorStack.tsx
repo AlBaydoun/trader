@@ -143,7 +143,7 @@ export function IndicatorStack({ symbol, timeframe, candles, signal, indicators,
           <span>Closed-candle context</span>
         </div>
         <div className="indicator-ai-reasons">
-          {aiReading.reasons.map((reason) => <span key={reason}>{reason}</span>)}
+          {aiReading.reasons.map((reason, index) => <span key={`${reason}-${index}`}>{reason}</span>)}
         </div>
         <div className="indicator-ai-watch"><strong>Watch:</strong> {aiReading.watch}</div>
       </div>

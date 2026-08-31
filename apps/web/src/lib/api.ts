@@ -105,6 +105,10 @@ export function getJdubPaperPortfolio(): Promise<PaperPortfolio> {
   return getJson<PaperPortfolio>("/paper/jdub/portfolio");
 }
 
+export function getRigorGatePaperPortfolio(): Promise<PaperPortfolio> {
+  return getJson<PaperPortfolio>("/paper/rigorgate/portfolio");
+}
+
 export function getExtremePaperPortfolio(): Promise<PaperPortfolio> {
   return getJson<PaperPortfolio>("/paper/extreme/portfolio");
 }
@@ -127,6 +131,10 @@ export function updateJdubPaperControl(control: PaperControl): Promise<PaperPort
   return sendJson<PaperPortfolio>("/paper/jdub/control", control);
 }
 
+export function updateRigorGatePaperControl(control: PaperControl): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>("/paper/rigorgate/control", control);
+}
+
 export function updateExtremePaperControl(control: PaperControl): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>("/paper/extreme/control", control);
 }
@@ -137,6 +145,10 @@ export function runPaperCycle(force = true): Promise<PaperPortfolio> {
 
 export function runJdubPaperCycle(force = true): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>(`/paper/jdub/cycle?force=${force ? "true" : "false"}`);
+}
+
+export function runRigorGatePaperCycle(force = true): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>(`/paper/rigorgate/cycle?force=${force ? "true" : "false"}`);
 }
 
 export function runExtremePaperCycle(force = true): Promise<PaperPortfolio> {
@@ -165,6 +177,10 @@ export function closeJdubPaperPosition(tradeId: string): Promise<PaperPortfolio>
   return sendJson<PaperPortfolio>(`/paper/jdub/positions/${encodeURIComponent(tradeId)}/close`);
 }
 
+export function closeRigorGatePaperPosition(tradeId: string): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>(`/paper/rigorgate/positions/${encodeURIComponent(tradeId)}/close`);
+}
+
 export function closeExtremePaperPosition(tradeId: string): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>(`/paper/extreme/positions/${encodeURIComponent(tradeId)}/close`);
 }
@@ -175,6 +191,10 @@ export function resetPaperPortfolio(): Promise<PaperPortfolio> {
 
 export function resetJdubPaperPortfolio(): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>("/paper/jdub/reset", { confirmation: "RESET PAPER ACCOUNT" });
+}
+
+export function resetRigorGatePaperPortfolio(): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>("/paper/rigorgate/reset", { confirmation: "RESET PAPER ACCOUNT" });
 }
 
 export function resetExtremePaperPortfolio(): Promise<PaperPortfolio> {

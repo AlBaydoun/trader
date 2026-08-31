@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     paper_adaptive_learning_enabled: bool = True
     paper_learning_min_samples: int = Field(default=8, ge=3, le=1000)
 
+    rigorgate_paper_auto_enabled: bool = True
+    rigorgate_paper_state_file: str = "../../data/rigorgate-paper.json"
+    rigorgate_paper_starting_balance: float = Field(default=10000.0, gt=0)
+    rigorgate_paper_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
+    rigorgate_paper_max_open_positions: int = Field(default=3, ge=1, le=200)
+    rigorgate_paper_min_opportunity_score: float = Field(default=62.0, ge=0.0, le=100.0)
+    rigorgate_paper_cycle_interval_seconds: int = Field(default=60, ge=15, le=3600)
+    rigorgate_paper_max_position_minutes: int = Field(default=120, ge=1, le=43200)
+
     jdub_paper_auto_enabled: bool = True
     jdub_paper_state_file: str = "../../data/jdub-traders-paper.json"
     jdub_paper_session_state_file: str = "../../data/jdub-traders-sessions.json"

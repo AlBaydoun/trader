@@ -60,7 +60,15 @@ def test_choose_best_scan_prefers_strongest_active_direction() -> None:
 def test_choose_best_scan_ignores_inactive_and_hold_candidates() -> None:
     result = choose_best_scan(
         [
-            scan("1m", opportunity(symbol="XAUUSD", direction=Direction.sell, score=99, market_active=False)),
+            scan(
+                "1m",
+                opportunity(
+                    symbol="XAUUSD",
+                    direction=Direction.sell,
+                    score=99,
+                    market_active=False,
+                ),
+            ),
             scan("5m", opportunity(symbol="BTCUSD", direction=Direction.hold, score=99)),
         ]
     )

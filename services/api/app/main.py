@@ -55,6 +55,7 @@ from app.services.market_scanner import MarketOpportunityScanner, MarketScanResu
 from app.services.mt5_bridge import MT5ConnectionSnapshot, MT5ReadOnlyBridge
 from app.services.news import NewsService
 from app.services.paper_trading import PaperPortfolio, PaperTradingService
+from app.services.rigorgate import RigorGateService
 from app.services.risk import RiskEngine
 from app.services.scanner import ScannerService
 from app.services.strategy import SignalEngine
@@ -114,6 +115,25 @@ paper_trader = PaperTradingService(
     adaptive_learning_enabled=settings.paper_adaptive_learning_enabled,
     learning_min_samples=settings.paper_learning_min_samples,
     timeframe_mode="auto" if settings.paper_timeframe_mode == "auto" else "manual",
+)
+rigorgate_trader = RigorGateService(
+    PaperTradingService(
+        settings.rigorgate_paper_state_file,
+        enabled=settings.rigorgate_paper_auto_enabled,
+        starting_balance=settings.rigorgate_paper_starting_balance,
+        risk_per_trade_pct=settings.rigorgate_paper_risk_per_trade_pct,
+        max_open_positions=settings.rigorgate_paper_max_open_positions,
+        minimum_opportunity_score=settings.rigorgate_paper_min_opportunity_score,
+        commission_bps=settings.paper_commission_bps,
+        slippage_bps=settings.paper_slippage_bps,
+        cycle_interval_seconds=settings.rigorgate_paper_cycle_interval_seconds,
+        max_position_minutes=settings.rigorgate_paper_max_position_minutes,
+        adaptive_learning_enabled=settings.paper_adaptive_learning_enabled,
+        learning_min_samples=settings.paper_learning_min_samples,
+        trade_source="rigorgate-virtual",
+    ),
+    market_scanner,
+    mt5_bridge,
 )
 jdub_trader = JdubTradersService(
     PaperTradingService(
@@ -312,6 +332,17 @@ def run_jdub_cycle(force: bool = False) -> PaperPortfolio:
         )
 
 
+def run_rigorgate_cycle(force: bool = False) -> PaperPortfolio:
+    with paper_cycle_lock:
+        account = account_registry.active_account()
+        return rigorgate_trader.process_cycle(
+            account,
+            settings.market_scan_max_symbols,
+            settings.market_scan_max_symbols,
+            force=force,
+        )
+
+
 def run_extreme_cycle(
     force: bool = False,
     process_virtual_trades: bool = False,
@@ -358,6 +389,17 @@ async def jdub_trading_loop() -> None:
         await asyncio.sleep(jdub_trader.ledger.cycle_interval_seconds)
 
 
+async def rigorgate_trading_loop() -> None:
+    await asyncio.sleep(18)
+    while True:
+        if rigorgate_trader.enabled:
+            try:
+                await asyncio.to_thread(run_rigorgate_cycle, True)
+            except Exception as exc:
+                rigorgate_trader.ledger.record_error(f"RigorGate virtual cycle failed: {exc}")
+        await asyncio.sleep(rigorgate_trader.ledger.cycle_interval_seconds)
+
+
 async def extreme_scanning_loop() -> None:
     await asyncio.sleep(8)
     while True:
@@ -375,17 +417,21 @@ async def extreme_scanning_loop() -> None:
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     paper_task = asyncio.create_task(paper_trading_loop())
     jdub_task = asyncio.create_task(jdub_trading_loop())
+    rigorgate_task = asyncio.create_task(rigorgate_trading_loop())
     extreme_task = asyncio.create_task(extreme_scanning_loop())
     try:
         yield
     finally:
         paper_task.cancel()
         jdub_task.cancel()
+        rigorgate_task.cancel()
         extreme_task.cancel()
         with suppress(asyncio.CancelledError):
             await paper_task
         with suppress(asyncio.CancelledError):
             await jdub_task
+        with suppress(asyncio.CancelledError):
+            await rigorgate_task
         with suppress(asyncio.CancelledError):
             await extreme_task
         mt5_bridge.shutdown()
@@ -591,6 +637,11 @@ def jdub_paper_portfolio() -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(jdub_trader.snapshot())
 
 
+@app.get("/paper/rigorgate/portfolio", response_model=PaperPortfolioDTO)
+def rigorgate_paper_portfolio() -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(rigorgate_trader.snapshot())
+
+
 @app.get("/paper/extreme/portfolio", response_model=PaperPortfolioDTO)
 def extreme_paper_portfolio() -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(extreme_paper_trader.snapshot())
@@ -624,6 +675,17 @@ def control_jdub_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfoli
     return PaperPortfolioDTO.model_validate(portfolio)
 
 
+@app.post("/paper/rigorgate/control", response_model=PaperPortfolioDTO)
+def control_rigorgate_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
+    portfolio = rigorgate_trader.update_control(
+        enabled=payload.enabled,
+        timeframe=payload.timeframe,
+        minimum_opportunity_score=payload.minimum_opportunity_score,
+        max_open_positions=payload.max_open_positions,
+    )
+    return PaperPortfolioDTO.model_validate(portfolio)
+
+
 @app.post("/paper/extreme/control", response_model=PaperPortfolioDTO)
 def control_extreme_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
     portfolio = extreme_paper_trader.update_control(
@@ -643,6 +705,11 @@ def cycle_paper_trading(force: bool = Query(default=False)) -> PaperPortfolioDTO
 @app.post("/paper/jdub/cycle", response_model=PaperPortfolioDTO)
 def cycle_jdub_paper_trading(force: bool = Query(default=True)) -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(run_jdub_cycle(force))
+
+
+@app.post("/paper/rigorgate/cycle", response_model=PaperPortfolioDTO)
+def cycle_rigorgate_paper_trading(force: bool = Query(default=True)) -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(run_rigorgate_cycle(force))
 
 
 @app.post("/paper/extreme/cycle", response_model=PaperPortfolioDTO)
@@ -736,6 +803,30 @@ def close_jdub_paper_position(trade_id: str) -> PaperPortfolioDTO:
     )
 
 
+@app.post("/paper/rigorgate/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
+def close_rigorgate_paper_position(trade_id: str) -> PaperPortfolioDTO:
+    position = next(
+        (item for item in rigorgate_trader.positions() if item.id == trade_id),
+        None,
+    )
+    if position is None:
+        raise HTTPException(status_code=404, detail="Open RigorGate virtual position not found.")
+    candles = mt5_bridge.candles(
+        account_registry.active_account(),
+        position.symbol,
+        rigorgate_trader.ledger.timeframe,
+        80,
+    )
+    if not candles:
+        raise HTTPException(
+            status_code=409,
+            detail="A verified current MT5 price is required to close the RigorGate position.",
+        )
+    return PaperPortfolioDTO.model_validate(
+        rigorgate_trader.close_trade(trade_id, candles[-1].close)
+    )
+
+
 @app.post("/paper/extreme/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
 def close_extreme_paper_position(trade_id: str) -> PaperPortfolioDTO:
     position = next(
@@ -774,6 +865,13 @@ def reset_jdub_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO
     if payload.confirmation != "RESET PAPER ACCOUNT":
         raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
     return PaperPortfolioDTO.model_validate(jdub_trader.reset())
+
+
+@app.post("/paper/rigorgate/reset", response_model=PaperPortfolioDTO)
+def reset_rigorgate_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
+    if payload.confirmation != "RESET PAPER ACCOUNT":
+        raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
+    return PaperPortfolioDTO.model_validate(rigorgate_trader.reset())
 
 
 @app.post("/paper/extreme/reset", response_model=PaperPortfolioDTO)

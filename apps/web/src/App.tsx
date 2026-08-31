@@ -20,6 +20,7 @@ import {
   getMarketSymbols,
   getNewsAnalysis,
   getJdubPaperPortfolio,
+  getRigorGatePaperPortfolio,
   getExtremePaperPortfolio,
   getStrategyLab,
   getPaperPortfolio,
@@ -31,16 +32,20 @@ import {
   setActiveAccount,
   closePaperPosition,
   closeJdubPaperPosition,
+  closeRigorGatePaperPosition,
   closeExtremePaperPosition,
   resetExtremePaperPortfolio,
   resetJdubPaperPortfolio,
+  resetRigorGatePaperPortfolio,
   resetPaperPortfolio,
   runJdubPaperCycle,
+  runRigorGatePaperCycle,
   runExtremePaperCycle,
   runStrategyLabCycle,
   runPaperCycle,
   updateExtremePaperControl,
   updateJdubPaperControl,
+  updateRigorGatePaperControl,
   updateStrategyLabControl,
   updatePaperControl
 } from "./lib/api";
@@ -101,6 +106,9 @@ export function App() {
   const [jdubPaperPortfolio, setJdubPaperPortfolio] = useState<PaperPortfolio>();
   const [jdubPaperBusy, setJdubPaperBusy] = useState(false);
   const [jdubPaperError, setJdubPaperError] = useState("");
+  const [rigorGatePaperPortfolio, setRigorGatePaperPortfolio] = useState<PaperPortfolio>();
+  const [rigorGatePaperBusy, setRigorGatePaperBusy] = useState(false);
+  const [rigorGatePaperError, setRigorGatePaperError] = useState("");
   const [extremePaperPortfolio, setExtremePaperPortfolio] = useState<PaperPortfolio>();
   const [extremePaperBusy, setExtremePaperBusy] = useState(false);
   const [extremePaperError, setExtremePaperError] = useState("");
@@ -178,6 +186,17 @@ export function App() {
     const interval = window.setInterval(() => void refreshJdubPaper(), 10000);
     return () => window.clearInterval(interval);
   }, [refreshJdubPaper]);
+
+  const refreshRigorGatePaper = useCallback(async () => {
+    const portfolio = await getRigorGatePaperPortfolio().catch(() => null);
+    if (portfolio) setRigorGatePaperPortfolio(portfolio);
+  }, []);
+
+  useEffect(() => {
+    void refreshRigorGatePaper();
+    const interval = window.setInterval(() => void refreshRigorGatePaper(), 10000);
+    return () => window.clearInterval(interval);
+  }, [refreshRigorGatePaper]);
 
   const refreshExtremePaper = useCallback(async () => {
     const portfolio = await getExtremePaperPortfolio().catch(() => null);
@@ -420,6 +439,55 @@ export function App() {
     }
   }
 
+  async function controlRigorGatePaper(control: PaperControl) {
+    setRigorGatePaperBusy(true);
+    setRigorGatePaperError("");
+    try {
+      setRigorGatePaperPortfolio(await updateRigorGatePaperControl(control));
+    } catch (error) {
+      setRigorGatePaperError(error instanceof Error ? error.message : "RigorGate control update failed.");
+    } finally {
+      setRigorGatePaperBusy(false);
+    }
+  }
+
+  async function runRigorGateVirtualCycle() {
+    setRigorGatePaperBusy(true);
+    setRigorGatePaperError("");
+    try {
+      setRigorGatePaperPortfolio(await runRigorGatePaperCycle(true));
+    } catch (error) {
+      setRigorGatePaperError(error instanceof Error ? error.message : "RigorGate virtual cycle failed.");
+    } finally {
+      setRigorGatePaperBusy(false);
+    }
+  }
+
+  async function closeRigorGateVirtualPosition(tradeId: string) {
+    setRigorGatePaperBusy(true);
+    setRigorGatePaperError("");
+    try {
+      setRigorGatePaperPortfolio(await closeRigorGatePaperPosition(tradeId));
+    } catch (error) {
+      setRigorGatePaperError(error instanceof Error ? error.message : "RigorGate position could not close.");
+    } finally {
+      setRigorGatePaperBusy(false);
+    }
+  }
+
+  async function resetRigorGateVirtualPortfolio() {
+    if (!window.confirm("Reset all RigorGate virtual trades, history, and performance results?")) return;
+    setRigorGatePaperBusy(true);
+    setRigorGatePaperError("");
+    try {
+      setRigorGatePaperPortfolio(await resetRigorGatePaperPortfolio());
+    } catch (error) {
+      setRigorGatePaperError(error instanceof Error ? error.message : "RigorGate reset failed.");
+    } finally {
+      setRigorGatePaperBusy(false);
+    }
+  }
+
   async function closeJdubVirtualPosition(tradeId: string) {
     setJdubPaperBusy(true);
     setJdubPaperError("");
@@ -631,6 +699,7 @@ export function App() {
       <VirtualTradersDashboard
         paper={paperPortfolio}
         jdub={jdubPaperPortfolio}
+        rigorgate={rigorGatePaperPortfolio}
         extreme={extremePaperPortfolio}
         strategyLab={strategyLab}
         onOpenPanel={scrollToPanel}
@@ -698,6 +767,17 @@ export function App() {
         onRun={() => void runJdubVirtualCycle()}
         onClose={(tradeId) => void closeJdubVirtualPosition(tradeId)}
         onReset={() => void resetJdubVirtualPortfolio()}
+        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+      />
+      <PaperTradingPanel
+        variant="rigorgate"
+        portfolio={rigorGatePaperPortfolio}
+        busy={rigorGatePaperBusy}
+        error={rigorGatePaperError}
+        onControl={(control) => void controlRigorGatePaper(control)}
+        onRun={() => void runRigorGateVirtualCycle()}
+        onClose={(tradeId) => void closeRigorGateVirtualPosition(tradeId)}
+        onReset={() => void resetRigorGateVirtualPortfolio()}
         onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
       />
       <ExtremeAlertsPanel

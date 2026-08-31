@@ -28,6 +28,21 @@ Automatic selection does not force a trade: when every timeframe is below the en
 correct result is to wait. `Jdub Traders`, `Extreme Virtual Trading`, and Strategy Lab keep their
 own strategy-specific timeframe behavior.
 
+## RigorGate Virtual Bot
+
+`RigorGate` is a separate paper-only adapter based on the linked conversation. It exposes the
+conversation's direct action model: an accepted `BUY` opens a long virtual position, `WAIT` does
+nothing, and an accepted `SELL` closes a matching long virtual position. A `SELL` without a
+matching long is a no-op; this bot does not open short positions from that action alone.
+
+The linked conversation describes demo signals and does not publish a complete, validated market
+formula. This implementation therefore uses the workstation's existing read-only MT5 market
+scanner and explainable signal reasons as RigorGate's evidence input, then applies its action
+semantics and independent score, cost, risk, time-limit, persistence, and learning controls. It is
+an adapter for virtual testing, not a claim that the linked demo predicts or guarantees profit.
+Its results are stored separately at `RIGORGATE_PAPER_STATE_FILE`. The panel supports the same
+open, history, daily, learning, and decision-log views as the other paper ledgers.
+
 ## Extreme Virtual Trading
 
 The `Extreme Virtual Trading` panel is a separate paper account for the 85/15 scanner. It is

@@ -14,7 +14,7 @@ import {
 import type { PaperControl, PaperEquityPoint, PaperPortfolio, PaperTrade } from "../types";
 
 type PaperTab = "open" | "history" | "daily" | "learning" | "log";
-type PaperTradingVariant = "market" | "jdub" | "extreme";
+type PaperTradingVariant = "market" | "jdub" | "rigorgate" | "extreme";
 
 interface PaperTradingPanelProps {
   variant?: PaperTradingVariant;
@@ -42,19 +42,20 @@ export function PaperTradingPanel({
   const [tab, setTab] = useState<PaperTab>("open");
   const extreme = variant === "extreme";
   const jdub = variant === "jdub";
-  const main = !extreme && !jdub;
+  const rigorgate = variant === "rigorgate";
+  const main = variant === "market";
   const engine = portfolio?.engine;
   const metrics = portfolio?.metrics;
   const panelId = extreme ? "extreme-paper-trading" : jdub ? "jdub-trading" : "paper-trading";
 
   return (
-    <section className="paper-workspace" id={panelId} aria-label={extreme ? "Extreme virtual trading" : jdub ? "Jdub Traders virtual trading" : "Virtual paper trading"}>
+    <section className="paper-workspace" id={panelId} aria-label={extreme ? "Extreme virtual trading" : jdub ? "Jdub Traders virtual trading" : rigorgate ? "RigorGate virtual trading" : "Virtual paper trading"}>
       <header className="paper-header">
         <div className="paper-title">
           <span className="paper-title-icon"><FlaskConical size={19} /></span>
           <div>
-            <h2>{extreme ? "Extreme Virtual Trading" : jdub ? "Jdub Traders" : "Virtual Trading"}</h2>
-            <span>{extreme ? "Confirmed 85/15 reversal simulation with no real money" : jdub ? "New York opening-range simulation with no real money" : "Automatic whole-market simulation · configurable timeframe"}</span>
+            <h2>{extreme ? "Extreme Virtual Trading" : jdub ? "Jdub Traders" : rigorgate ? "RigorGate" : "Virtual Trading"}</h2>
+            <span>{extreme ? "Confirmed 85/15 reversal simulation with no real money" : jdub ? "New York opening-range simulation with no real money" : rigorgate ? "BUY / WAIT / SELL evidence-gated simulation with no real money" : "Automatic whole-market simulation · configurable timeframe"}</span>
           </div>
           <span className="paper-timeframe-badge">
             Timeframe {engine ? formatTimeframe(engine.timeframe) : "--"}
@@ -83,8 +84,8 @@ export function PaperTradingPanel({
           <button
             className="icon-button"
             type="button"
-            title={extreme ? "Reset extreme virtual portfolio" : jdub ? "Reset Jdub Traders virtual portfolio" : "Reset virtual portfolio"}
-            aria-label={extreme ? "Reset extreme virtual portfolio" : jdub ? "Reset Jdub Traders virtual portfolio" : "Reset virtual portfolio"}
+            title={extreme ? "Reset extreme virtual portfolio" : jdub ? "Reset Jdub Traders virtual portfolio" : rigorgate ? "Reset RigorGate virtual portfolio" : "Reset virtual portfolio"}
+            aria-label={extreme ? "Reset extreme virtual portfolio" : jdub ? "Reset Jdub Traders virtual portfolio" : rigorgate ? "Reset RigorGate virtual portfolio" : "Reset virtual portfolio"}
             disabled={busy}
             onClick={onReset}
           >
@@ -113,7 +114,7 @@ export function PaperTradingPanel({
 
       {metrics && engine ? (
         <>
-          <div className="paper-metrics" aria-label={extreme ? "Extreme virtual trading performance" : jdub ? "Jdub Traders virtual trading performance" : "Paper trading performance"}>
+          <div className="paper-metrics" aria-label={extreme ? "Extreme virtual trading performance" : jdub ? "Jdub Traders virtual trading performance" : rigorgate ? "RigorGate virtual trading performance" : "Paper trading performance"}>
             <PaperMetric label="Virtual equity" value={money(metrics.equity)} change={metrics.total_return_pct} />
             <PaperMetric label={extreme ? "Profit since signals" : "Net result"} value={signedMoney(metrics.realized_pnl + metrics.unrealized_pnl)} />
             <PaperMetric label="Open / closed" value={`${metrics.open_positions} / ${metrics.closed_trades}`} />
@@ -142,12 +143,12 @@ export function PaperTradingPanel({
               <div className="paper-subheading">
                 <div>
                   <strong>Simulation rules</strong>
-                  <span>{extreme ? "Applied only after RSI(1), MACD, and MA confirmation" : jdub ? "15m New York range, 5m close, then 1m trigger" : "Applied to every eligible directional signal on the selected timeframe"}</span>
+                  <span>{extreme ? "Applied only after RSI(1), MACD, and MA confirmation" : jdub ? "15m New York range, 5m close, then 1m trigger" : rigorgate ? "BUY opens a long; WAIT does nothing; SELL closes a matching long" : "Applied to every eligible directional signal on the selected timeframe"}</span>
                 </div>
               </div>
               <dl>
                 <div><dt>Market coverage</dt><dd>{engine.scanned_symbols || "--"} instruments</dd></div>
-                <div><dt>Entry filter</dt><dd>{extreme ? `Confirmed 85/15 · score ${engine.minimum_opportunity_score}+` : jdub ? `Opening range · score ${engine.minimum_opportunity_score}+` : engine.minimum_opportunity_score === 0 ? "All strategy signals" : `Score ${engine.minimum_opportunity_score}+`}</dd></div>
+                <div><dt>Entry filter</dt><dd>{extreme ? `Confirmed 85/15 · score ${engine.minimum_opportunity_score}+` : jdub ? `Opening range · score ${engine.minimum_opportunity_score}+` : rigorgate ? `BUY / SELL gate · score ${engine.minimum_opportunity_score}+` : engine.minimum_opportunity_score === 0 ? "All strategy signals" : `Score ${engine.minimum_opportunity_score}+`}</dd></div>
                 <div><dt>Risk per trade</dt><dd>{engine.risk_per_trade_pct.toFixed(2)}%</dd></div>
                 <div><dt>Position limit</dt><dd>{engine.max_open_positions}</dd></div>
                 <div><dt>Cycle</dt><dd>{main && engine.timeframe_mode === "auto" ? `Auto · ${engine.timeframe}` : engine.timeframe} / {engine.cycle_interval_seconds}s</dd></div>
