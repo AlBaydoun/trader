@@ -1,9 +1,11 @@
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from importlib import import_module
 from pathlib import Path
 from threading import Lock
+from time import sleep
 from typing import Any
 
 from app.domain.models import Candle, Direction
@@ -92,15 +94,28 @@ class MT5ReadOnlyBridge:
         enabled: bool,
         timeout_ms: int,
         module_loader: Callable[[], Any] | None = None,
+        scan_cache_seconds: int = 10,
     ) -> None:
         self.enabled = enabled
         self.timeout_ms = timeout_ms
         self._module_loader = module_loader or (lambda: import_module("MetaTrader5"))
         self._module: Any | None = None
         self._lock = Lock()
+        self._lock_timeout_seconds = min(0.5, max(0.05, timeout_ms / 1000))
+        self._scan_cache_for = timedelta(seconds=max(1, scan_cache_seconds))
+        self._scan_cache: dict[
+            str,
+            tuple[
+                datetime,
+                list[MT5MarketSymbol],
+                dict[str, list[Candle]],
+            ],
+        ] = {}
 
     def probe(self, account: BrokerAccountProfile | None) -> MT5ConnectionSnapshot:
-        with self._lock:
+        with self._locked() as acquired:
+            if not acquired:
+                return self._busy_snapshot(account)
             return self._probe_unlocked(account)
 
     def quotes(
@@ -108,7 +123,9 @@ class MT5ReadOnlyBridge:
         account: BrokerAccountProfile | None,
         symbols: list[str],
     ) -> list[MT5Quote]:
-        with self._lock:
+        with self._locked() as acquired:
+            if not acquired:
+                return []
             snapshot = self._probe_unlocked(account)
             if not snapshot.connection_verified or self._module is None:
                 return []
@@ -150,7 +167,9 @@ class MT5ReadOnlyBridge:
         self,
         account: BrokerAccountProfile | None,
     ) -> list[MT5PositionSnapshot]:
-        with self._lock:
+        with self._locked() as acquired:
+            if not acquired:
+                return []
             snapshot = self._probe_unlocked(account)
             if not snapshot.connection_verified or self._module is None:
                 return []
@@ -161,7 +180,9 @@ class MT5ReadOnlyBridge:
         self,
         account: BrokerAccountProfile | None,
     ) -> list[MT5MarketSymbol]:
-        with self._lock:
+        with self._locked() as acquired:
+            if not acquired:
+                return []
             snapshot = self._probe_unlocked(account)
             if not snapshot.connection_verified or self._module is None:
                 return []
@@ -174,14 +195,27 @@ class MT5ReadOnlyBridge:
         timeframe: str,
         limit: int,
         max_symbols: int,
+        force: bool = False,
     ) -> tuple[list[MT5MarketSymbol], dict[str, list[Candle]]]:
-        with self._lock:
+        with self._locked() as acquired:
+            if not acquired:
+                return [], {}
             snapshot = self._probe_unlocked(account)
             if not snapshot.connection_verified or self._module is None:
                 return [], {}
             timeframe_value = self._timeframe_value(timeframe)
             if timeframe_value is None:
                 return [], {}
+
+            cache_key = f"{account.id if account else 'none'}:{timeframe}:{limit}:{max_symbols}"
+            cached = self._scan_cache.get(cache_key)
+            now = datetime.now(UTC)
+            if (
+                not force
+                and cached is not None
+                and now - cached[0] < self._scan_cache_for
+            ):
+                return list(cached[1]), dict(cached[2])
 
             infos = [
                 info for info in (self._module.symbols_get() or ()) if self._is_tradeable(info)
@@ -201,12 +235,15 @@ class MT5ReadOnlyBridge:
                 if not was_visible:
                     self._module.symbol_select(symbol, False)
                 if rates is None or len(rates) < 41:
+                    sleep(0.001)
                     continue
                 candle_sets[symbol] = self._rates_to_candles(
                     symbol,
                     timeframe,
                     self._closed_rates(rates),
                 )
+                sleep(0.001)
+            self._scan_cache[cache_key] = (now, symbols, candle_sets)
             return symbols, candle_sets
 
     def candles(
@@ -216,7 +253,9 @@ class MT5ReadOnlyBridge:
         timeframe: str,
         limit: int,
     ) -> list[Candle]:
-        with self._lock:
+        with self._locked() as acquired:
+            if not acquired:
+                return []
             snapshot = self._probe_unlocked(account)
             if not snapshot.connection_verified or self._module is None or account is None:
                 return []
@@ -240,9 +279,33 @@ class MT5ReadOnlyBridge:
             return self._rates_to_candles(symbol, timeframe, self._closed_rates(rates))
 
     def shutdown(self) -> None:
-        with self._lock:
+        with self._locked() as acquired:
+            if not acquired:
+                return
             if self._module is not None:
                 self._module.shutdown()
+
+    @contextmanager
+    def _locked(self) -> Iterator[bool]:
+        acquired = self._lock.acquire(timeout=self._lock_timeout_seconds)
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                self._lock.release()
+
+    def _busy_snapshot(
+        self,
+        account: BrokerAccountProfile | None,
+    ) -> MT5ConnectionSnapshot:
+        return self._empty_snapshot(
+            "busy",
+            "The MT5 data bridge is busy with a market scan; retry shortly.",
+            account,
+            datetime.now(UTC),
+            package_available=self._module is not None,
+            initialized=self._module is not None,
+        )
 
     def _probe_unlocked(
         self,

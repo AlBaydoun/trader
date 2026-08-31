@@ -88,9 +88,7 @@ class ExtremeSignalScanner:
         self.alert_cooldown = timedelta(seconds=alert_cooldown_seconds)
         self._states: dict[str, tuple[str, datetime]] = {}
         self._recent_alerts: list[ExtremeAlert] = []
-        self._cache_key = ""
-        self._cached_at: datetime | None = None
-        self._cached: ExtremeScanResult | None = None
+        self._cache: dict[str, tuple[datetime, ExtremeScanResult]] = {}
         self._lock = RLock()
 
     def scan(
@@ -106,12 +104,10 @@ class ExtremeSignalScanner:
             key = f"{account.id if account else 'none'}:{timeframe}:{max_symbols}"
             if (
                 not force
-                and self._cached is not None
-                and self._cache_key == key
-                and self._cached_at is not None
-                and now - self._cached_at < self.cache_for
+                and key in self._cache
+                and now - self._cache[key][0] < self.cache_for
             ):
-                return self._limited(self._cached, result_limit)
+                return self._limited(self._cache[key][1], result_limit)
 
             symbols, candles_by_symbol = self.bridge.scan_market_candles(
                 account,
@@ -147,9 +143,7 @@ class ExtremeSignalScanner:
                     "signal. Alerts are decision support and never place orders."
                 ),
             )
-            self._cache_key = key
-            self._cached_at = now
-            self._cached = result
+            self._cache[key] = (now, result)
             return self._limited(result, result_limit)
 
     def _reading(self, symbol: str, candles: list[Candle]) -> ExtremeReading:

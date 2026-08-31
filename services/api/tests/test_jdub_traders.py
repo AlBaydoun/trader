@@ -19,8 +19,9 @@ class JdubBridge:
         timeframe: str,
         limit: int,
         max_symbols: int,
+        force: bool = False,
     ) -> tuple[list[MT5MarketSymbol], dict[str, list[Candle]]]:
-        del account, timeframe, limit, max_symbols
+        del account, timeframe, limit, max_symbols, force
         latest = self.candles[-1].ts
         metadata = MT5MarketSymbol(
             symbol=self.symbol,

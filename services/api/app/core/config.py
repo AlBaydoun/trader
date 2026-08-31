@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     account_equity: float = 10000.0
     market_scan_max_symbols: int = Field(default=500, ge=10, le=2000)
     market_scan_cache_seconds: int = Field(default=300, ge=15, le=3600)
+    market_data_cache_seconds: int = Field(default=10, ge=1, le=300)
 
     paper_auto_enabled: bool = True
     paper_state_file: str = "../../data/paper-regime-trading.json"
@@ -39,6 +40,7 @@ class Settings(BaseSettings):
 
     rigorgate_paper_auto_enabled: bool = True
     rigorgate_paper_state_file: str = "../../data/rigorgate-paper.json"
+    rigorgate_paper_timeframe_mode: str = Field(default="auto", pattern="^(auto|manual)$")
     rigorgate_paper_timeframe: str = Field(default="15m", pattern="^(1m|5m|15m|1h|4h|1d)$")
     rigorgate_paper_starting_balance: float = Field(default=10000.0, gt=0)
     rigorgate_paper_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
@@ -50,6 +52,9 @@ class Settings(BaseSettings):
     jdub_paper_auto_enabled: bool = True
     jdub_paper_state_file: str = "../../data/jdub-traders-paper.json"
     jdub_paper_session_state_file: str = "../../data/jdub-traders-sessions.json"
+    jdub_paper_timeframe_mode: str = Field(default="auto", pattern="^(auto|manual)$")
+    jdub_paper_timeframe: str = Field(default="1m", pattern="^(1m|5m|15m|1h|4h|1d)$")
+    jdub_paper_timeframes: str = "1m,5m,15m,1h,4h,1d"
     jdub_paper_starting_balance: float = Field(default=10000.0, gt=0)
     jdub_paper_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
     jdub_paper_max_open_positions: int = Field(default=3, ge=1, le=200)
@@ -59,12 +64,25 @@ class Settings(BaseSettings):
 
     extreme_paper_auto_enabled: bool = True
     extreme_paper_state_file: str = "../../data/extreme-pullback-trading.json"
+    extreme_paper_timeframe_mode: str = Field(default="auto", pattern="^(auto|manual)$")
+    extreme_paper_timeframes: str = "1m,5m,15m,1h,4h,1d"
     extreme_paper_starting_balance: float = Field(default=10000.0, gt=0)
     extreme_paper_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
     extreme_paper_max_open_positions: int = Field(default=3, ge=1, le=200)
     extreme_paper_min_opportunity_score: float = Field(default=70.0, ge=0.0, le=100.0)
     extreme_paper_confirmed_only: bool = True
     extreme_paper_max_position_minutes: int = Field(default=60, ge=1, le=43200)
+
+    candlestick_paper_auto_enabled: bool = True
+    candlestick_paper_state_file: str = "../../data/candlestick-patterns.json"
+    candlestick_paper_timeframe_mode: str = Field(default="auto", pattern="^(auto|manual)$")
+    candlestick_paper_timeframe: str = Field(default="15m", pattern="^(1m|5m|15m|1h|4h|1d)$")
+    candlestick_paper_starting_balance: float = Field(default=10000.0, gt=0)
+    candlestick_paper_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
+    candlestick_paper_max_open_positions: int = Field(default=3, ge=1, le=200)
+    candlestick_paper_min_opportunity_score: float = Field(default=65.0, ge=0.0, le=100.0)
+    candlestick_paper_cycle_interval_seconds: int = Field(default=60, ge=15, le=3600)
+    candlestick_paper_max_position_minutes: int = Field(default=240, ge=1, le=43200)
 
     strategy_lab_enabled: bool = True
     strategy_lab_state_dir: str = "../../data/strategy-lab"

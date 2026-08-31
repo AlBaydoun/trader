@@ -23,10 +23,9 @@ Main `Virtual Trading` starts with automatic timeframe selection. Every cycle co
 configured `PAPER_TIMEFRAMES` set (1m, 5m, 15m, 1h, 4h, and 1d by default), selects the timeframe
 with the strongest active directional setup, and then applies the same minimum score, learning,
 position, and risk filters. The selected timeframe is shown in the panel and stored on each new
-virtual trade. You can switch to manual mode from the panel or with `PAPER_TIMEFRAME_MODE=manual`.
-Automatic selection does not force a trade: when every timeframe is below the entry threshold, the
-correct result is to wait. `Jdub Traders`, `Extreme Virtual Trading`, and Strategy Lab keep their
-own strategy-specific timeframe behavior.
+virtual trade. The RigorGate, Extreme Virtual Trading, Jdub Traders, and Candlestick Pattern Bot
+panels use the same Auto/Manual control. Manual mode forces the selected timeframe; automatic
+selection does not force a trade when every timeframe is below the entry threshold.
 
 ## RigorGate Virtual Bot
 
@@ -42,8 +41,23 @@ semantics and independent score, cost, risk, time-limit, persistence, and learni
 an adapter for virtual testing, not a claim that the linked demo predicts or guarantees profit.
 Its results are stored separately at `RIGORGATE_PAPER_STATE_FILE`. The panel supports the same
 open, history, daily, learning, and decision-log views as the other paper ledgers.
-RigorGate defaults to 15m on a fresh ledger, and its Timeframe control also supports 1m, 5m, 1h,
-4h, and 1d. Changing it in the panel persists the choice across API restarts.
+RigorGate defaults to automatic selection on a fresh ledger, with 15m as its initial displayed
+timeframe. Its Timeframe control supports 1m, 5m, 15m, 1h, 4h, and 1d. Changing the mode or forced
+timeframe in the panel persists the choice across API restarts.
+
+## Candlestick Pattern Bot
+
+`Candlestick Pattern Bot` is a separate paper-only ledger. It defaults to M15 when a new ledger is
+created, then automatically compares the configured timeframe set unless Manual mode is selected.
+It scans every tradeable instrument exposed by the active MT5 terminal and only creates a paper
+candidate for a directional named pattern. The entry score combines the pattern strength with
+EMA(20)/EMA(50) trend agreement, candle body quality, quote freshness, spread, and an ATR-based
+stop/target model. A Doji is recorded as context and does not open a trade by itself.
+
+Its history, daily reports, learning lessons, decisions, and equity curve are isolated at
+`CANDLESTICK_PAPER_STATE_FILE`. The panel shows the detected pattern in each trade's signal
+reasons, so a result can be audited after exit instead of treating the pattern label as a promise
+of a reversal.
 
 ## Extreme Virtual Trading
 
@@ -70,11 +84,13 @@ sample instead of optimizing for a single trade.
 ## Jdub Traders Virtual Strategy
 
 `Jdub Traders` is a separate paper-only ledger based on the explicit framework in the linked Jdub
-Trades video. It scans the full tradeable MT5 catalog on M1, marks the high and low of the first
-15-minute New York session candle (09:30-09:45 ET), waits for a completed M5 close, and evaluates
-the M1 breakout, break-and-retest, and reversal entry models. It permits at most one setup per
-symbol per New York session and persists that session guard so an API restart does not duplicate a
-setup.
+Trades video. On M1 it scans the full tradeable MT5 catalog, marks the high and low of the first
+15-minute New York session range (09:30-09:45 ET), waits for a completed M5 close, and evaluates
+the M1 breakout, break-and-retest, and reversal entry models. Auto mode compares the configured
+timeframes. A forced higher timeframe uses a timeframe-aware version of the same opening-range
+framework and records that choice on each trade; M1 remains the faithful original mode. It permits
+at most one setup per symbol per New York session and persists that session guard so an API restart
+does not duplicate a setup.
 
 The video leaves stop placement and model selection partly discretionary. The implementation uses
 an explicit structural stop assumption and a 1.5R virtual target so results are reproducible; each

@@ -113,6 +113,10 @@ export function getExtremePaperPortfolio(): Promise<PaperPortfolio> {
   return getJson<PaperPortfolio>("/paper/extreme/portfolio");
 }
 
+export function getCandlestickPaperPortfolio(): Promise<PaperPortfolio> {
+  return getJson<PaperPortfolio>("/paper/candlestick/portfolio");
+}
+
 export function getStrategyLab(): Promise<StrategyLabSnapshot> {
   return getJson<StrategyLabSnapshot>("/paper/strategies");
 }
@@ -139,6 +143,10 @@ export function updateExtremePaperControl(control: PaperControl): Promise<PaperP
   return sendJson<PaperPortfolio>("/paper/extreme/control", control);
 }
 
+export function updateCandlestickPaperControl(control: PaperControl): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>("/paper/candlestick/control", control);
+}
+
 export function runPaperCycle(force = true): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>(`/paper/cycle?force=${force ? "true" : "false"}`);
 }
@@ -153,6 +161,10 @@ export function runRigorGatePaperCycle(force = true): Promise<PaperPortfolio> {
 
 export function runExtremePaperCycle(force = true): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>(`/paper/extreme/cycle?force=${force ? "true" : "false"}`);
+}
+
+export function runCandlestickPaperCycle(force = true): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>(`/paper/candlestick/cycle?force=${force ? "true" : "false"}`);
 }
 
 export function runStrategyLabCycle(force = true): Promise<StrategyLabSnapshot> {
@@ -185,6 +197,10 @@ export function closeExtremePaperPosition(tradeId: string): Promise<PaperPortfol
   return sendJson<PaperPortfolio>(`/paper/extreme/positions/${encodeURIComponent(tradeId)}/close`);
 }
 
+export function closeCandlestickPaperPosition(tradeId: string): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>(`/paper/candlestick/positions/${encodeURIComponent(tradeId)}/close`);
+}
+
 export function resetPaperPortfolio(): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>("/paper/reset", { confirmation: "RESET PAPER ACCOUNT" });
 }
@@ -199,6 +215,10 @@ export function resetRigorGatePaperPortfolio(): Promise<PaperPortfolio> {
 
 export function resetExtremePaperPortfolio(): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>("/paper/extreme/reset", { confirmation: "RESET PAPER ACCOUNT" });
+}
+
+export function resetCandlestickPaperPortfolio(): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>("/paper/candlestick/reset", { confirmation: "RESET PAPER ACCOUNT" });
 }
 
 export function getBacktest(symbol: string, timeframe: string): Promise<Backtest> {

@@ -53,9 +53,7 @@ class MarketOpportunityScanner:
         self.bridge = bridge
         self.signal_engine = signal_engine
         self.cache_for = timedelta(seconds=cache_seconds)
-        self._cache_key = ""
-        self._cached_at: datetime | None = None
-        self._cached: MarketScanResult | None = None
+        self._cache: dict[str, tuple[datetime, MarketScanResult]] = {}
         self._lock = RLock()
 
     def scan(
@@ -87,12 +85,10 @@ class MarketOpportunityScanner:
         key = f"{account.id if account else 'none'}:{timeframe}:{max_symbols}"
         if (
             not force
-            and self._cached is not None
-            and self._cache_key == key
-            and self._cached_at is not None
-            and now - self._cached_at < self.cache_for
+            and key in self._cache
+            and now - self._cache[key][0] < self.cache_for
         ):
-            return self._limited(self._cached, result_limit)
+            return self._limited(self._cache[key][1], result_limit)
 
         symbols, candles_by_symbol = self.bridge.scan_market_candles(
             account,
@@ -130,9 +126,7 @@ class MarketOpportunityScanner:
             ),
             opportunities=opportunities,
         )
-        self._cache_key = key
-        self._cached_at = now
-        self._cached = result
+        self._cache[key] = (now, result)
         return self._limited(result, result_limit)
 
     @staticmethod

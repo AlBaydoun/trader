@@ -7,7 +7,7 @@ from app.services.accounts import BrokerAccountProfile
 from app.services.extreme_scanner import ExtremeAlert, ExtremeReading, ExtremeScanResult
 from app.services.market_scanner import MarketOpportunity, MarketScanResult
 from app.services.mt5_bridge import MT5ReadOnlyBridge
-from app.services.paper_trading import PaperPortfolio, PaperTradingService
+from app.services.paper_trading import PaperPortfolio, PaperTimeframeMode, PaperTradingService
 
 
 class ExtremePaperTradingService:
@@ -32,6 +32,10 @@ class ExtremePaperTradingService:
     def timeframe(self) -> str:
         return self.ledger.timeframe
 
+    @property
+    def timeframe_mode(self) -> PaperTimeframeMode:
+        return self.ledger.timeframe_mode
+
     def snapshot(self) -> PaperPortfolio:
         return self.ledger.snapshot()
 
@@ -43,12 +47,14 @@ class ExtremePaperTradingService:
         *,
         enabled: bool | None = None,
         timeframe: str | None = None,
+        timeframe_mode: PaperTimeframeMode | None = None,
         minimum_opportunity_score: float | None = None,
         max_open_positions: int | None = None,
     ) -> PaperPortfolio:
         return self.ledger.update_control(
             enabled=enabled,
             timeframe=timeframe,
+            timeframe_mode=timeframe_mode,
             minimum_opportunity_score=minimum_opportunity_score,
             max_open_positions=max_open_positions,
         )

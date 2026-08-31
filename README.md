@@ -18,6 +18,12 @@ This project is **not** a profit guarantee and does not ship with live trading e
 - Separate persistent Extreme Virtual Trading ledger for confirmed RSI(1) 85/15 plus rejection,
   RSI(3/7), momentum, MACD histogram, and EMA agreement, including signal-time price, modeled
   fill, live virtual P/L, exit result, and learning.
+- Separate persistent Candlestick Pattern Bot ledger, defaulting to M15 and recognizing bullish/
+  bearish engulfing, morning/evening star, three white soldiers/three black crows, and Doji.
+- Automatic timeframe selection across the paper bots compares configured timeframes and records
+  the selected timeframe on every virtual trade; Manual mode can force a timeframe. Jdub Traders
+  preserves its exact M1 opening-range/M5 confirmation behavior on M1 and uses an explicit
+  timeframe-aware opening-range adaptation when forced to a higher timeframe.
 - MT5/JustMarkets integration boundary with a disabled-by-default adapter contract.
 - Persistent multi-account profiles with masked logins and an in-workstation account selector.
 - Windows MT5 read-only bridge for verified account metrics, broker quotes, and open positions.

@@ -72,3 +72,26 @@ def test_missing_package_is_reported_without_crashing(tmp_path: Path) -> None:
     assert snapshot.status == "package_unavailable"
     assert snapshot.package_available is False
     assert snapshot.connection_verified is False
+
+
+def test_market_candle_batches_are_reused_until_forced(tmp_path: Path) -> None:
+    terminal_path = tmp_path / "terminal64.exe"
+    terminal_path.touch()
+    module = FakeMetaTrader()
+    bridge = MT5ReadOnlyBridge(True, 1000, lambda: module, scan_cache_seconds=60)
+    profile = account(terminal_path)
+
+    first_symbols, first_candles = bridge.scan_market_candles(profile, "1m", 80, 500)
+    second_symbols, second_candles = bridge.scan_market_candles(profile, "1m", 80, 500)
+    forced_symbols, forced_candles = bridge.scan_market_candles(
+        profile,
+        "1m",
+        80,
+        500,
+        force=True,
+    )
+
+    assert [item.symbol for item in first_symbols] == [item.symbol for item in second_symbols]
+    assert first_candles.keys() == second_candles.keys()
+    assert [item.symbol for item in forced_symbols] == [item.symbol for item in first_symbols]
+    assert forced_candles.keys() == first_candles.keys()

@@ -2162,6 +2162,10 @@ button:disabled {
   border-top-color: #ff8ea0;
 }
 
+.dashboard-trader-card.candlestick {
+  border-top-color: #8ed1ff;
+}
+
 .dashboard-trader-card.lab {
   border-top-color: #a9c5ff;
 }
@@ -2198,6 +2202,10 @@ button:disabled {
 
 .dashboard-trader-card.extreme .dashboard-card-icon {
   color: #ff8ea0;
+}
+
+.dashboard-trader-card.candlestick .dashboard-card-icon {
+  color: #8ed1ff;
 }
 
 .dashboard-trader-card.lab .dashboard-card-icon {
@@ -2737,6 +2745,13 @@ button:disabled {
   width: 100%;
   min-height: 34px;
   accent-color: #62e0b8;
+}
+
+.paper-settings-grid .field-note {
+  margin-top: 5px;
+  color: #788692;
+  font-size: 10px;
+  line-height: 1.35;
 }
 
 .paper-ledger-heading {

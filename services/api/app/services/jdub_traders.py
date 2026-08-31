@@ -2,6 +2,7 @@ import json
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, time, timedelta
+from math import ceil
 from pathlib import Path
 from threading import RLock
 from typing import Any, Literal
@@ -12,6 +13,7 @@ from app.services.accounts import BrokerAccountProfile
 from app.services.market_scanner import MarketOpportunity, MarketScanResult
 from app.services.mt5_bridge import MT5MarketSymbol, MT5ReadOnlyBridge
 from app.services.paper_trading import PaperPortfolio, PaperTradingService
+from app.services.timeframe_selector import choose_best_scan
 
 
 @dataclass(frozen=True)
@@ -48,10 +50,12 @@ class JdubTradersService:
         ledger: PaperTradingService,
         bridge: MT5ReadOnlyBridge,
         session_state_file: str,
+        timeframe_options: tuple[str, ...] = ("1m", "5m", "15m", "1h", "4h", "1d"),
     ) -> None:
         self.ledger = ledger
         self.bridge = bridge
         self.session_state_file = self._resolve_state_file(session_state_file)
+        self.timeframe_options = timeframe_options
         self._used_sessions: dict[str, str] = {}
         self._lock = RLock()
         self._load_sessions()
@@ -71,12 +75,14 @@ class JdubTradersService:
         *,
         enabled: bool | None = None,
         timeframe: str | None = None,
+        timeframe_mode: Literal["auto", "manual"] | None = None,
         minimum_opportunity_score: float | None = None,
         max_open_positions: int | None = None,
     ) -> PaperPortfolio:
         return self.ledger.update_control(
             enabled=enabled,
             timeframe=timeframe,
+            timeframe_mode=timeframe_mode,
             minimum_opportunity_score=minimum_opportunity_score,
             max_open_positions=max_open_positions,
         )
@@ -97,7 +103,17 @@ class JdubTradersService:
         result_limit: int = 50,
         force: bool = False,
     ) -> PaperPortfolio:
-        result = self.scan(account, max_symbols, result_limit, force)
+        timeframes = (
+            [self.ledger.timeframe]
+            if self.ledger.timeframe_mode == "manual"
+            else list(self.timeframe_options)
+        )
+        results = [
+            self.scan(account, max_symbols, result_limit, force, timeframe=timeframe)
+            for timeframe in timeframes
+        ]
+        selected_scan = choose_best_scan([result.market_scan for result in results])
+        result = next(item for item in results if item.market_scan is selected_scan)
         if result.market_scan.source != "mt5" or account is None:
             self.ledger.record_error(
                 "The Jdub Traders virtual cycle was skipped because verified MT5 market "
@@ -118,34 +134,39 @@ class JdubTradersService:
         result_limit: int = 50,
         force: bool = False,
         now: datetime | None = None,
+        timeframe: str | None = None,
     ) -> JdubScanResult:
-        del force  # The bridge query is intentionally fresh for the time-sensitive paper loop.
         with self._lock:
             generated_at = now or datetime.now(UTC)
+            scan_timeframe = timeframe or self.ledger.timeframe
             if account is None:
                 return JdubScanResult(
-                    market_scan=self._empty_scan(generated_at, "unavailable"),
+                    market_scan=self._empty_scan(generated_at, "unavailable", scan_timeframe),
                     prices={},
                 )
 
             symbols, candles_by_symbol = self.bridge.scan_market_candles(
                 account,
-                self.timeframe,
+                scan_timeframe,
                 self.history_bars,
                 max_symbols,
+                force=force,
             )
             metadata = {symbol.symbol: symbol for symbol in symbols}
             prices = {
-                symbol: candles[-1]
-                for symbol, candles in candles_by_symbol.items()
-                if candles
+                symbol: candles[-1] for symbol, candles in candles_by_symbol.items() if candles
             }
             candidates: list[tuple[MarketOpportunity, str]] = []
             for symbol, candles in candles_by_symbol.items():
-                setup = self._setup(candles, generated_at)
+                setup = self._setup(candles, generated_at, scan_timeframe)
                 if setup is None or self._used_sessions.get(symbol) == setup.session_date:
                     continue
-                opportunity = self._opportunity(setup, metadata.get(symbol), generated_at)
+                opportunity = self._opportunity(
+                    setup,
+                    metadata.get(symbol),
+                    generated_at,
+                    scan_timeframe,
+                )
                 if opportunity is not None:
                     candidates.append((opportunity, setup.session_date))
 
@@ -160,11 +181,7 @@ class JdubTradersService:
             )
             opportunities: list[MarketOpportunity] = []
             for rank, (opportunity, session_date) in enumerate(candidates[:result_limit], start=1):
-                opportunities.append(
-                    MarketOpportunity(
-                        **{**opportunity.__dict__, "rank": rank}
-                    )
-                )
+                opportunities.append(MarketOpportunity(**{**opportunity.__dict__, "rank": rank}))
                 self._used_sessions[opportunity.symbol] = session_date
             if opportunities:
                 self._save_sessions()
@@ -172,13 +189,14 @@ class JdubTradersService:
             return JdubScanResult(
                 market_scan=MarketScanResult(
                     source="mt5" if symbols else "unavailable",
-                    timeframe=self.timeframe,
+                    timeframe=scan_timeframe,
                     available_symbols=len(symbols),
                     scanned_symbols=len(candles_by_symbol),
                     generated_at=generated_at,
                     disclaimer=(
                         "Jdub Traders is a paper-only mechanical interpretation of the linked "
-                        "video: NY opening range, M5 confirmation, and M1 entry models. "
+                        "video: NY opening range with timeframe-aware confirmation and entry "
+                        "models. "
                         "It does not predict or guarantee profit and never places orders."
                     ),
                     opportunities=opportunities,
@@ -186,9 +204,12 @@ class JdubTradersService:
                 prices=prices,
             )
 
-    def _setup(self, candles: list[Candle], now: datetime) -> JdubSetup | None:
+    def _setup(self, candles: list[Candle], now: datetime, timeframe: str) -> JdubSetup | None:
         ordered = sorted(candles, key=lambda candle: candle.ts)
-        minimum_candles = self.opening_range_minutes + 6
+        bar_minutes = timeframe_minutes(timeframe)
+        bar_delta = timedelta(minutes=bar_minutes)
+        opening_bar_count = max(1, ceil(self.opening_range_minutes / bar_minutes))
+        minimum_candles = opening_bar_count + 6
         if len(ordered) < minimum_candles:
             return None
         latest = ordered[-1]
@@ -204,24 +225,23 @@ class JdubTradersService:
             return None
 
         opening = [candle for candle in ordered if range_start <= candle.ts < range_end]
-        if len(opening) != self.opening_range_minutes or not self._is_contiguous(opening):
+        if len(opening) != opening_bar_count or not self._is_contiguous(opening, bar_delta):
             return None
         range_high = max(candle.high for candle in opening)
         range_low = min(candle.low for candle in opening)
         if range_high <= range_low:
             return None
 
-        m5_bars = [
-            candle
-            for candle in self._aggregate_m5(ordered)
-            if range_end <= candle.ts < entry_end
-        ]
+        confirmation_bars = self._aggregate_m5(ordered) if timeframe == "1m" else ordered
+        m5_bars = [candle for candle in confirmation_bars if range_end <= candle.ts < entry_end]
         setups: list[JdubSetup] = []
         for confirmation in m5_bars:
             after_confirmation = [
                 candle
                 for candle in ordered
-                if confirmation.ts + timedelta(minutes=5) <= candle.ts <= latest.ts
+                if confirmation.ts + (timedelta(minutes=5) if timeframe == "1m" else bar_delta)
+                <= candle.ts
+                <= latest.ts
             ]
             if confirmation.close > range_high and confirmation.close > confirmation.open:
                 retest = next(
@@ -369,6 +389,7 @@ class JdubTradersService:
         setup: JdubSetup,
         metadata: MT5MarketSymbol | None,
         now: datetime,
+        timeframe: str,
     ) -> MarketOpportunity | None:
         entry = setup.trigger.close
         range_size = setup.range_high - setup.range_low
@@ -440,7 +461,7 @@ class JdubTradersService:
                 SignalReason(
                     "confirmation",
                     (
-                        "Completed 5-minute candle closed "
+                        f"Completed {'5-minute' if timeframe == '1m' else timeframe} candle closed "
                         f"{'above' if setup.direction == Direction.buy else 'below'} "
                         "the opening range."
                     ),
@@ -449,7 +470,10 @@ class JdubTradersService:
                 ),
                 SignalReason(
                     "entry_model",
-                    f"1-minute {model_label} trigger confirmed at {setup.trigger.close:.8g}.",
+                    (
+                        f"{('1-minute' if timeframe == '1m' else timeframe)} {model_label} trigger "
+                        f"confirmed at {setup.trigger.close:.8g}."
+                    ),
                     impact,
                     0.2,
                 ),
@@ -503,17 +527,24 @@ class JdubTradersService:
         return completed
 
     @staticmethod
-    def _is_contiguous(candles: list[Candle]) -> bool:
+    def _is_contiguous(
+        candles: list[Candle],
+        step: timedelta = timedelta(minutes=1),
+    ) -> bool:
         return all(
-            current.ts - previous.ts == timedelta(minutes=1)
+            current.ts - previous.ts == step
             for previous, current in zip(candles[:-1], candles[1:], strict=True)
         )
 
     @staticmethod
-    def _empty_scan(generated_at: datetime, source: str) -> MarketScanResult:
+    def _empty_scan(
+        generated_at: datetime,
+        source: str,
+        timeframe: str,
+    ) -> MarketScanResult:
         return MarketScanResult(
             source=source,
-            timeframe="1m",
+            timeframe=timeframe,
             available_symbols=0,
             scanned_symbols=0,
             generated_at=generated_at,
@@ -538,9 +569,7 @@ class JdubTradersService:
 
     def _save_sessions(self) -> None:
         self.session_state_file.parent.mkdir(parents=True, exist_ok=True)
-        temporary = self.session_state_file.with_suffix(
-            f"{self.session_state_file.suffix}.tmp"
-        )
+        temporary = self.session_state_file.with_suffix(f"{self.session_state_file.suffix}.tmp")
         payload: dict[str, Any] = {"version": 1, "used_sessions": self._used_sessions}
         try:
             with temporary.open("w", encoding="utf-8", newline="\n") as stream:
@@ -558,3 +587,13 @@ class JdubTradersService:
             return configured
         api_directory = Path(__file__).resolve().parents[2]
         return (api_directory / configured).resolve()
+
+
+def timeframe_minutes(timeframe: str) -> int:
+    units = {"m": 1, "h": 60, "d": 1440}
+    if not timeframe or timeframe[-1] not in units:
+        return 1
+    try:
+        return max(1, int(timeframe[:-1]) * units[timeframe[-1]])
+    except ValueError:
+        return 1

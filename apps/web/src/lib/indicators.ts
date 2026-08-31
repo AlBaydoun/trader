@@ -11,6 +11,7 @@ export type IndicatorKind =
   | "stochastic"
   | "adx"
   | "atr"
+  | "candlestick"
   | "structure";
 
 export interface ActiveIndicator {
@@ -144,6 +145,14 @@ export const INDICATOR_CATALOG: IndicatorDefinition[] = [
     defaultConfig: { kind: "atr", period: 14 }
   },
   {
+    kind: "candlestick",
+    label: "Candlestick Patterns",
+    group: "Structure",
+    description: "Recognizes common formations such as engulfing candles, stars, soldiers, crows, and Doji.",
+    overlay: false,
+    defaultConfig: { kind: "candlestick" }
+  },
+  {
     kind: "structure",
     label: "Price Structure",
     group: "Structure",
@@ -158,7 +167,8 @@ export const DEFAULT_INDICATORS: ActiveIndicator[] = [
   { kind: "ema", period: 50 },
   { kind: "rsi", period: 14 },
   { kind: "macd", fast: 12, slow: 26, signal: 9 },
-  { kind: "atr", period: 14 }
+  { kind: "atr", period: 14 },
+  { kind: "candlestick" }
 ];
 
 export const INDICATOR_PRESETS: Record<string, ActiveIndicator[]> = {
@@ -471,6 +481,33 @@ function buildReading(candles: Candle[], indicator: ActiveIndicator): IndicatorR
     };
   }
 
+  if (indicator.kind === "candlestick") {
+    const patterns = detectCandlestickPatterns(candles);
+    const directional = patterns.filter((pattern) => pattern.bias !== 0);
+    const strongest = [...directional].sort((a, b) => Math.abs(b.bias) - Math.abs(a.bias))[0];
+    const names = patterns.map((pattern) => pattern.name);
+    if (!strongest) {
+      return {
+        name: "Candlestick Patterns",
+        parameters: "latest sequence",
+        value: names.length ? names.join(" · ") : "None detected",
+        status: names.includes("Doji") ? "Indecision candle" : "No named formation",
+        tone: "warning",
+        detail: names.includes("Doji") ? "Doji shows balance between buyers and sellers; wait for confirmation." : "No supported formation is present on the latest candle sequence.",
+        bias: 0
+      };
+    }
+    return {
+      name: "Candlestick Patterns",
+      parameters: "latest sequence",
+      value: names.join(" · "),
+      status: strongest.bias > 0 ? "Bullish pattern" : "Bearish pattern",
+      tone: strongest.bias > 0 ? "positive" : "negative",
+      detail: "Pattern recognition is context, not a standalone entry command. Confirm trend, volatility, spread, and risk.",
+      bias: strongest.bias
+    };
+  }
+
   const lookback = safePeriod(indicator.period, 20);
   const highs = candles.slice(-lookback - 1, -1).map((candle) => candle.high);
   const lows = candles.slice(-lookback - 1, -1).map((candle) => candle.low);
@@ -486,6 +523,53 @@ function buildReading(candles: Candle[], indicator: ActiveIndicator): IndicatorR
     detail: `Range ${formatPrice(low)} – ${formatPrice(high)}.`,
     bias
   };
+}
+
+type CandlePattern = { name: string; bias: number };
+
+function detectCandlestickPatterns(candles: Candle[]): CandlePattern[] {
+  if (candles.length < 3) return [];
+  const first = candles.at(-3)!;
+  const middle = candles.at(-2)!;
+  const latest = candles.at(-1)!;
+  const patterns: CandlePattern[] = [];
+  if (isDoji(latest)) patterns.push({ name: "Doji", bias: 0 });
+  if (isBearish(middle) && isBullish(latest) && latest.open <= middle.close && latest.close >= middle.open && body(latest) > body(middle)) {
+    patterns.push({ name: "Bullish engulfing", bias: 2 });
+  }
+  if (isBullish(middle) && isBearish(latest) && latest.open >= middle.close && latest.close <= middle.open && body(latest) > body(middle)) {
+    patterns.push({ name: "Bearish engulfing", bias: -2 });
+  }
+  if (isBearish(first) && body(first) / range(first) >= 0.5 && body(middle) <= body(first) * 0.45 && isBullish(latest) && latest.close >= (first.open + first.close) / 2) {
+    patterns.push({ name: "Morning star", bias: 2 });
+  }
+  if (isBullish(first) && body(first) / range(first) >= 0.5 && body(middle) <= body(first) * 0.45 && isBearish(latest) && latest.close <= (first.open + first.close) / 2) {
+    patterns.push({ name: "Evening star", bias: -2 });
+  }
+  const trio = candles.slice(-3);
+  if (trio.every(isBullish) && trio.every((candle) => body(candle) / range(candle) >= 0.45) && risingBodies(trio)) {
+    patterns.push({ name: "Three white soldiers", bias: 2 });
+  }
+  if (trio.every(isBearish) && trio.every((candle) => body(candle) / range(candle) >= 0.45) && fallingBodies(trio)) {
+    patterns.push({ name: "Three black crows", bias: -2 });
+  }
+  return patterns;
+}
+
+function isBullish(candle: Candle) { return candle.close > candle.open; }
+function isBearish(candle: Candle) { return candle.close < candle.open; }
+function body(candle: Candle) { return Math.abs(candle.close - candle.open); }
+function range(candle: Candle) { return Math.max(candle.high - candle.low, 0.0000000001); }
+function isDoji(candle: Candle) { return body(candle) <= range(candle) * 0.1; }
+function risingBodies(candles: Candle[]) {
+  return candles[1].close > candles[0].close && candles[2].close > candles[1].close
+    && candles[1].open >= candles[0].open && candles[1].open <= candles[0].close
+    && candles[2].open >= candles[1].open && candles[2].open <= candles[1].close;
+}
+function fallingBodies(candles: Candle[]) {
+  return candles[1].close < candles[0].close && candles[2].close < candles[1].close
+    && candles[1].open <= candles[0].open && candles[1].open >= candles[0].close
+    && candles[2].open <= candles[1].open && candles[2].open >= candles[1].close;
 }
 
 function safePeriod(value: number | undefined, fallback: number): number {

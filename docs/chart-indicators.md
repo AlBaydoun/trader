@@ -9,7 +9,12 @@ shown as readings with their current values and interpretation.
 - Overlays: EMA, SMA, Bollinger Bands, VWAP, and Ichimoku Cloud.
 - Momentum: RSI, MACD, and Stochastic.
 - Trend and volatility: ADX + DI and ATR.
-- Structure: recent highs, lows, breakout, and candle direction.
+- Structure: recent highs, lows, breakout, candle direction, and Candlestick Patterns.
+
+`Candlestick Patterns` is the common name for the indicator shown in the reference image. The
+workstation recognizes Bullish/Bearish Engulfing, Morning/Evening Star, Three White Soldiers,
+Three Black Crows, and Doji. Directional patterns contribute a bullish or bearish reading; Doji
+is shown as indecision and contributes no entry bias.
 
 ## Use It
 

@@ -1,6 +1,8 @@
 import asyncio
 from collections.abc import AsyncIterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, suppress
+from functools import partial
 from threading import Lock
 
 from fastapi import FastAPI, HTTPException, Query
@@ -46,6 +48,7 @@ from app.schemas import (
 )
 from app.services.accounts import AccountRegistry, BrokerAccountProfile
 from app.services.backtest import BacktestService
+from app.services.candlestick_patterns import CandlestickPatternBotService
 from app.services.extreme_backtest import ExtremeBacktestService
 from app.services.extreme_paper_trading import ExtremePaperTradingService
 from app.services.extreme_scanner import ExtremeScanResult, ExtremeSignalScanner
@@ -62,6 +65,7 @@ from app.services.strategy import SignalEngine
 from app.services.strategy_lab import STRATEGY_PROFILES, ScalpStrategyLabService, StrategyLabMember
 from app.services.timeframe_selector import choose_best_scan
 
+PAPER_TIMEFRAME_OPTIONS = ("1m", "5m", "15m", "1h", "4h", "1d")
 settings = get_settings()
 market_data = MarketDataService()
 signal_engine = SignalEngine()
@@ -75,6 +79,7 @@ account_registry = AccountRegistry.from_settings(settings)
 mt5_bridge = MT5ReadOnlyBridge(
     enabled=settings.mt5_read_only_enabled,
     timeout_ms=settings.mt5_timeout_ms,
+    scan_cache_seconds=settings.market_data_cache_seconds,
 )
 
 
@@ -120,6 +125,9 @@ rigorgate_trader = RigorGateService(
     PaperTradingService(
         settings.rigorgate_paper_state_file,
         enabled=settings.rigorgate_paper_auto_enabled,
+        timeframe_mode=(
+            "auto" if settings.rigorgate_paper_timeframe_mode == "auto" else "manual"
+        ),
         timeframe=settings.rigorgate_paper_timeframe,
         starting_balance=settings.rigorgate_paper_starting_balance,
         risk_per_trade_pct=settings.rigorgate_paper_risk_per_trade_pct,
@@ -135,11 +143,16 @@ rigorgate_trader = RigorGateService(
     ),
     market_scanner,
     mt5_bridge,
+    timeframe_options=settings.paper_timeframe_options,
 )
 jdub_trader = JdubTradersService(
     PaperTradingService(
         settings.jdub_paper_state_file,
         enabled=settings.jdub_paper_auto_enabled,
+        timeframe_mode=(
+            "auto" if settings.jdub_paper_timeframe_mode == "auto" else "manual"
+        ),
+        timeframe=settings.jdub_paper_timeframe,
         starting_balance=settings.jdub_paper_starting_balance,
         risk_per_trade_pct=settings.jdub_paper_risk_per_trade_pct,
         max_open_positions=settings.jdub_paper_max_open_positions,
@@ -154,11 +167,19 @@ jdub_trader = JdubTradersService(
     ),
     mt5_bridge,
     settings.jdub_paper_session_state_file,
+    tuple(
+        item.strip()
+        for item in settings.jdub_paper_timeframes.split(",")
+        if item.strip() in PAPER_TIMEFRAME_OPTIONS
+    ) or PAPER_TIMEFRAME_OPTIONS,
 )
 extreme_paper_trader = ExtremePaperTradingService(
     PaperTradingService(
         settings.extreme_paper_state_file,
         enabled=settings.extreme_paper_auto_enabled,
+        timeframe_mode=(
+            "auto" if settings.extreme_paper_timeframe_mode == "auto" else "manual"
+        ),
         starting_balance=settings.extreme_paper_starting_balance,
         risk_per_trade_pct=settings.extreme_paper_risk_per_trade_pct,
         max_open_positions=settings.extreme_paper_max_open_positions,
@@ -173,6 +194,29 @@ extreme_paper_trader = ExtremePaperTradingService(
     ),
     mt5_bridge,
     confirmed_only=settings.extreme_paper_confirmed_only,
+)
+candlestick_trader = CandlestickPatternBotService(
+    PaperTradingService(
+        settings.candlestick_paper_state_file,
+        enabled=settings.candlestick_paper_auto_enabled,
+        timeframe_mode=(
+            "auto" if settings.candlestick_paper_timeframe_mode == "auto" else "manual"
+        ),
+        timeframe=settings.candlestick_paper_timeframe,
+        starting_balance=settings.candlestick_paper_starting_balance,
+        risk_per_trade_pct=settings.candlestick_paper_risk_per_trade_pct,
+        max_open_positions=settings.candlestick_paper_max_open_positions,
+        minimum_opportunity_score=settings.candlestick_paper_min_opportunity_score,
+        commission_bps=settings.paper_commission_bps,
+        slippage_bps=settings.paper_slippage_bps,
+        cycle_interval_seconds=settings.candlestick_paper_cycle_interval_seconds,
+        max_position_minutes=settings.candlestick_paper_max_position_minutes,
+        adaptive_learning_enabled=settings.paper_adaptive_learning_enabled,
+        learning_min_samples=settings.paper_learning_min_samples,
+        trade_source="candlestick-patterns-virtual",
+    ),
+    mt5_bridge,
+    timeframe_options=settings.paper_timeframe_options,
 )
 strategy_lab = ScalpStrategyLabService(
     [
@@ -193,6 +237,7 @@ strategy_lab = ScalpStrategyLabService(
                     adaptive_learning_enabled=settings.strategy_lab_adaptive_learning_enabled,
                     learning_min_samples=settings.strategy_lab_learning_min_samples,
                     trade_source=f"strategy-lab-{profile.id}",
+                    timeframe_mode="auto",
                 ),
                 mt5_bridge,
                 confirmed_only=False,
@@ -202,12 +247,13 @@ strategy_lab = ScalpStrategyLabService(
     ]
 )
 paper_cycle_lock = Lock()
+paper_cycle_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="paper-cycle")
 
 
 def refresh_mt5_connection() -> MT5ConnectionSnapshot:
     active_account = account_registry.active_account()
     snapshot = mt5_bridge.probe(active_account)
-    if active_account:
+    if active_account and snapshot.status != "busy":
         account_registry.mark_connection_verified(
             active_account.id,
             snapshot.connection_verified,
@@ -261,9 +307,6 @@ def broker() -> PaperTradingService | MT5Broker:
     return paper_trader
 
 
-PAPER_TIMEFRAME_OPTIONS = ("1m", "5m", "15m", "1h", "4h", "1d")
-
-
 def scan_paper_timeframes(
     account: BrokerAccountProfile | None,
     force: bool,
@@ -277,9 +320,9 @@ def scan_paper_timeframes(
             for timeframe in settings.paper_timeframe_options
             if timeframe in PAPER_TIMEFRAME_OPTIONS
         ] or [paper_trader.timeframe]
-        # Automatic selection needs fresh comparisons on every paper cycle. The scanner still
-        # protects concurrent calls, while this bypasses its five-minute per-timeframe cache.
-        scan_force = True
+        # Background cycles reuse the short-lived MT5 batch cache. Explicit cycle requests can
+        # still pass force=True when the operator wants a fresh market read.
+        scan_force = force
 
     scans = [
         market_scanner.scan(
@@ -344,18 +387,58 @@ def run_rigorgate_cycle(force: bool = False) -> PaperPortfolio:
         )
 
 
+def scan_extreme_timeframes(
+    account: BrokerAccountProfile | None,
+    force: bool,
+) -> ExtremeScanResult:
+    if extreme_paper_trader.timeframe_mode == "manual":
+        timeframes = [extreme_paper_trader.timeframe]
+    else:
+        configured = [
+            item.strip()
+            for item in settings.extreme_paper_timeframes.split(",")
+            if item.strip() in PAPER_TIMEFRAME_OPTIONS
+        ]
+        timeframes = configured or [extreme_paper_trader.timeframe]
+    scans = [
+        extreme_scanner.scan(
+            account,
+            timeframe,
+            settings.market_scan_max_symbols,
+            settings.market_scan_max_symbols,
+            force,
+        )
+        for timeframe in timeframes
+    ]
+    return max(scans, key=_extreme_scan_rank)
+
+
+def _extreme_scan_rank(scan: ExtremeScanResult) -> tuple[int, int, float, int]:
+    confirmed = sum(
+        1
+        for alert in scan.alerts
+        if alert.reversal_confirmed
+    )
+    strongest = max((abs(alert.score - 50) for alert in scan.alerts), default=0.0)
+    return (1 if scan.source == "mt5" else 0, confirmed, strongest, scan.scanned_symbols)
+
+
 def run_extreme_cycle(
     force: bool = False,
     process_virtual_trades: bool = False,
 ) -> ExtremeScanResult:
     with paper_cycle_lock:
         account = account_registry.active_account()
-        result = extreme_scanner.scan(
-            account,
-            extreme_paper_trader.timeframe if process_virtual_trades else paper_trader.timeframe,
-            settings.market_scan_max_symbols,
-            settings.market_scan_max_symbols,
-            force,
+        result = (
+            scan_extreme_timeframes(account, force)
+            if process_virtual_trades
+            else extreme_scanner.scan(
+                account,
+                paper_trader.timeframe,
+                settings.market_scan_max_symbols,
+                settings.market_scan_max_symbols,
+                force,
+            )
         )
         if process_virtual_trades:
             extreme_paper_trader.process_scan(result, account)
@@ -373,7 +456,10 @@ async def paper_trading_loop() -> None:
     while True:
         if paper_trader.enabled:
             try:
-                await asyncio.to_thread(run_paper_cycle)
+                await asyncio.get_running_loop().run_in_executor(
+                    paper_cycle_executor,
+                    run_paper_cycle,
+                )
             except Exception as exc:
                 paper_trader.record_error(f"Virtual cycle failed: {exc}")
         await asyncio.sleep(paper_trader.cycle_interval_seconds)
@@ -384,10 +470,34 @@ async def jdub_trading_loop() -> None:
     while True:
         if jdub_trader.enabled:
             try:
-                await asyncio.to_thread(run_jdub_cycle)
+                await asyncio.get_running_loop().run_in_executor(
+                    paper_cycle_executor,
+                    run_jdub_cycle,
+                )
             except Exception as exc:
                 jdub_trader.ledger.record_error(f"Jdub Traders virtual cycle failed: {exc}")
         await asyncio.sleep(jdub_trader.ledger.cycle_interval_seconds)
+
+
+async def candlestick_trading_loop() -> None:
+    await asyncio.sleep(24)
+    while True:
+        if candlestick_trader.enabled:
+            try:
+                await asyncio.get_running_loop().run_in_executor(
+                    paper_cycle_executor,
+                    partial(
+                        candlestick_trader.process_cycle,
+                        account_registry.active_account(),
+                        settings.market_scan_max_symbols,
+                        settings.market_scan_max_symbols,
+                    ),
+                )
+            except Exception as exc:
+                candlestick_trader.ledger.record_error(
+                    f"Candlestick Pattern Bot virtual cycle failed: {exc}"
+                )
+        await asyncio.sleep(candlestick_trader.ledger.cycle_interval_seconds)
 
 
 async def rigorgate_trading_loop() -> None:
@@ -395,7 +505,10 @@ async def rigorgate_trading_loop() -> None:
     while True:
         if rigorgate_trader.enabled:
             try:
-                await asyncio.to_thread(run_rigorgate_cycle, True)
+                await asyncio.get_running_loop().run_in_executor(
+                    paper_cycle_executor,
+                    run_rigorgate_cycle,
+                )
             except Exception as exc:
                 rigorgate_trader.ledger.record_error(f"RigorGate virtual cycle failed: {exc}")
         await asyncio.sleep(rigorgate_trader.ledger.cycle_interval_seconds)
@@ -406,10 +519,13 @@ async def extreme_scanning_loop() -> None:
     while True:
         if settings.extreme_scan_enabled:
             with suppress(Exception):
-                await asyncio.to_thread(
-                    run_extreme_cycle,
-                    False,
-                    extreme_paper_trader.enabled or strategy_lab.enabled,
+                await asyncio.get_running_loop().run_in_executor(
+                    paper_cycle_executor,
+                    partial(
+                        run_extreme_cycle,
+                        False,
+                        extreme_paper_trader.enabled or strategy_lab.enabled,
+                    ),
                 )
         await asyncio.sleep(settings.extreme_scan_interval_seconds)
 
@@ -418,6 +534,7 @@ async def extreme_scanning_loop() -> None:
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     paper_task = asyncio.create_task(paper_trading_loop())
     jdub_task = asyncio.create_task(jdub_trading_loop())
+    candlestick_task = asyncio.create_task(candlestick_trading_loop())
     rigorgate_task = asyncio.create_task(rigorgate_trading_loop())
     extreme_task = asyncio.create_task(extreme_scanning_loop())
     try:
@@ -425,6 +542,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     finally:
         paper_task.cancel()
         jdub_task.cancel()
+        candlestick_task.cancel()
         rigorgate_task.cancel()
         extreme_task.cancel()
         with suppress(asyncio.CancelledError):
@@ -432,9 +550,12 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         with suppress(asyncio.CancelledError):
             await jdub_task
         with suppress(asyncio.CancelledError):
+            await candlestick_task
+        with suppress(asyncio.CancelledError):
             await rigorgate_task
         with suppress(asyncio.CancelledError):
             await extreme_task
+        paper_cycle_executor.shutdown(wait=True, cancel_futures=True)
         mt5_bridge.shutdown()
 
 
@@ -456,7 +577,7 @@ app.add_middleware(
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
@@ -648,6 +769,11 @@ def extreme_paper_portfolio() -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(extreme_paper_trader.snapshot())
 
 
+@app.get("/paper/candlestick/portfolio", response_model=PaperPortfolioDTO)
+def candlestick_paper_portfolio() -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(candlestick_trader.snapshot())
+
+
 @app.get("/paper/strategies", response_model=StrategyLabDTO)
 def paper_strategy_lab() -> StrategyLabDTO:
     return StrategyLabDTO.model_validate(strategy_lab.snapshot())
@@ -670,6 +796,7 @@ def control_jdub_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfoli
     portfolio = jdub_trader.update_control(
         enabled=payload.enabled,
         timeframe=payload.timeframe,
+        timeframe_mode=payload.timeframe_mode,
         minimum_opportunity_score=payload.minimum_opportunity_score,
         max_open_positions=payload.max_open_positions,
     )
@@ -681,6 +808,7 @@ def control_rigorgate_paper_trading(payload: PaperControlRequestDTO) -> PaperPor
     portfolio = rigorgate_trader.update_control(
         enabled=payload.enabled,
         timeframe=payload.timeframe,
+        timeframe_mode=payload.timeframe_mode,
         minimum_opportunity_score=payload.minimum_opportunity_score,
         max_open_positions=payload.max_open_positions,
     )
@@ -692,6 +820,19 @@ def control_extreme_paper_trading(payload: PaperControlRequestDTO) -> PaperPortf
     portfolio = extreme_paper_trader.update_control(
         enabled=payload.enabled,
         timeframe=payload.timeframe,
+        timeframe_mode=payload.timeframe_mode,
+        minimum_opportunity_score=payload.minimum_opportunity_score,
+        max_open_positions=payload.max_open_positions,
+    )
+    return PaperPortfolioDTO.model_validate(portfolio)
+
+
+@app.post("/paper/candlestick/control", response_model=PaperPortfolioDTO)
+def control_candlestick_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
+    portfolio = candlestick_trader.update_control(
+        enabled=payload.enabled,
+        timeframe=payload.timeframe,
+        timeframe_mode=payload.timeframe_mode,
         minimum_opportunity_score=payload.minimum_opportunity_score,
         max_open_positions=payload.max_open_positions,
     )
@@ -716,6 +857,18 @@ def cycle_rigorgate_paper_trading(force: bool = Query(default=True)) -> PaperPor
 @app.post("/paper/extreme/cycle", response_model=PaperPortfolioDTO)
 def cycle_extreme_paper_trading(force: bool = Query(default=True)) -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(run_extreme_paper_cycle(force))
+
+
+@app.post("/paper/candlestick/cycle", response_model=PaperPortfolioDTO)
+def cycle_candlestick_paper_trading(force: bool = Query(default=True)) -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(
+        candlestick_trader.process_cycle(
+            account_registry.active_account(),
+            settings.market_scan_max_symbols,
+            settings.market_scan_max_symbols,
+            force=force,
+        )
+    )
 
 
 @app.post("/paper/strategies/cycle", response_model=StrategyLabDTO)
@@ -854,6 +1007,33 @@ def close_extreme_paper_position(trade_id: str) -> PaperPortfolioDTO:
     )
 
 
+@app.post("/paper/candlestick/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
+def close_candlestick_paper_position(trade_id: str) -> PaperPortfolioDTO:
+    position = next(
+        (item for item in candlestick_trader.positions() if item.id == trade_id),
+        None,
+    )
+    if position is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Open candlestick virtual position not found.",
+        )
+    candles = mt5_bridge.candles(
+        account_registry.active_account(),
+        position.symbol,
+        candlestick_trader.timeframe,
+        80,
+    )
+    if not candles:
+        raise HTTPException(
+            status_code=409,
+            detail="A verified current MT5 price is required to close the candlestick position.",
+        )
+    return PaperPortfolioDTO.model_validate(
+        candlestick_trader.close_trade(trade_id, candles[-1].close)
+    )
+
+
 @app.post("/paper/reset", response_model=PaperPortfolioDTO)
 def reset_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
     if payload.confirmation != "RESET PAPER ACCOUNT":
@@ -880,6 +1060,13 @@ def reset_extreme_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolio
     if payload.confirmation != "RESET PAPER ACCOUNT":
         raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
     return PaperPortfolioDTO.model_validate(extreme_paper_trader.reset())
+
+
+@app.post("/paper/candlestick/reset", response_model=PaperPortfolioDTO)
+def reset_candlestick_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
+    if payload.confirmation != "RESET PAPER ACCOUNT":
+        raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
+    return PaperPortfolioDTO.model_validate(candlestick_trader.reset())
 
 
 @app.get("/candles/{symbol}", response_model=list[CandleDTO])

@@ -1,10 +1,12 @@
+from collections.abc import Sequence
 from dataclasses import replace
 from typing import Literal, Protocol
 
 from app.domain.models import Candle, Direction, Position, SignalReason
 from app.services.accounts import BrokerAccountProfile
 from app.services.market_scanner import MarketOpportunity, MarketScanResult
-from app.services.paper_trading import PaperPortfolio, PaperTradingService
+from app.services.paper_trading import PaperPortfolio, PaperTimeframeMode, PaperTradingService
+from app.services.timeframe_selector import choose_best_scan
 
 
 class RigorGateScanner(Protocol):
@@ -38,10 +40,12 @@ class RigorGateService:
         ledger: PaperTradingService,
         scanner: RigorGateScanner,
         bridge: RigorGatePriceProvider,
+        timeframe_options: Sequence[str] = ("1m", "5m", "15m", "1h", "4h", "1d"),
     ) -> None:
         self.ledger = ledger
         self.scanner = scanner
         self.bridge = bridge
+        self.timeframe_options = tuple(timeframe_options)
 
     @property
     def enabled(self) -> bool:
@@ -58,12 +62,14 @@ class RigorGateService:
         *,
         enabled: bool | None = None,
         timeframe: str | None = None,
+        timeframe_mode: PaperTimeframeMode | None = None,
         minimum_opportunity_score: float | None = None,
         max_open_positions: int | None = None,
     ) -> PaperPortfolio:
         return self.ledger.update_control(
             enabled=enabled,
             timeframe=timeframe,
+            timeframe_mode=timeframe_mode,
             minimum_opportunity_score=minimum_opportunity_score,
             max_open_positions=max_open_positions,
         )
@@ -81,13 +87,22 @@ class RigorGateService:
         result_limit: int = 50,
         force: bool = False,
     ) -> PaperPortfolio:
-        scan = self.scanner.scan(
-            account,
-            self.ledger.timeframe,
-            max_symbols,
-            result_limit,
-            force=force,
+        timeframes = (
+            [self.ledger.timeframe]
+            if self.ledger.timeframe_mode == "manual"
+            else list(self.timeframe_options)
         )
+        scans = [
+            self.scanner.scan(
+                account,
+                timeframe,
+                max_symbols,
+                result_limit,
+                force=force,
+            )
+            for timeframe in timeframes
+        ]
+        scan = choose_best_scan(scans)
         if scan.source != "mt5" or account is None:
             self.ledger.record_error(
                 "The RigorGate virtual cycle was skipped because verified MT5 market data "

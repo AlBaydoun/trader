@@ -10,6 +10,7 @@ import {
   ScanLine,
   ShieldCheck,
   Target,
+  CandlestickChart,
   TrendingDown
 } from "lucide-react";
 import type { PaperPortfolio, StrategyLabSnapshot } from "../types";
@@ -19,6 +20,7 @@ interface VirtualTradersDashboardProps {
   jdub?: PaperPortfolio;
   rigorgate?: PaperPortfolio;
   extreme?: PaperPortfolio;
+  candlestick?: PaperPortfolio;
   strategyLab?: StrategyLabSnapshot;
   onOpenPanel: (panelId: string) => void;
 }
@@ -26,7 +28,7 @@ interface VirtualTradersDashboardProps {
 interface TraderCardProps {
   name: string;
   subtitle: string;
-  accent: "market" | "jdub" | "rigorgate" | "extreme";
+  accent: "market" | "jdub" | "rigorgate" | "extreme" | "candlestick";
   icon: ReactNode;
   panelId: string;
   portfolio?: PaperPortfolio;
@@ -38,10 +40,11 @@ export function VirtualTradersDashboard({
   jdub,
   rigorgate,
   extreme,
+  candlestick,
   strategyLab,
   onOpenPanel
 }: VirtualTradersDashboardProps) {
-  const portfolios = [paper, jdub, rigorgate, extreme].filter(
+  const portfolios = [paper, jdub, rigorgate, extreme, candlestick].filter(
     (portfolio): portfolio is PaperPortfolio => Boolean(portfolio)
   );
   const totalEquity = portfolios.length
@@ -143,6 +146,15 @@ export function VirtualTradersDashboard({
           icon={<TrendingDown size={17} />}
           panelId="extreme-paper-trading"
           portfolio={extreme}
+          onOpenPanel={onOpenPanel}
+        />
+        <TraderCard
+          name="Candlestick Pattern Bot"
+          subtitle="M15 pattern-recognition paper strategy"
+          accent="candlestick"
+          icon={<CandlestickChart size={17} />}
+          panelId="candlestick-trading"
+          portfolio={candlestick}
           onOpenPanel={onOpenPanel}
         />
         <StrategyLabCard snapshot={strategyLab} onOpenPanel={onOpenPanel} />

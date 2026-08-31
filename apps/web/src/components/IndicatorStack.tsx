@@ -1,4 +1,4 @@
-import { Activity, BarChart3, BrainCircuit, Gauge, Layers3, Plus, Settings2, Sparkles, TrendingUp, X } from "lucide-react";
+import { Activity, BarChart3, BrainCircuit, Gauge, Layers3, Plus, Settings2, Sparkles, Target, TrendingUp, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { Candle, Signal } from "../types";
 import {
@@ -254,6 +254,7 @@ function indicatorParameters(indicator: ActiveIndicator): string {
   if (indicator.kind === "ichimoku") return `${indicator.conversion ?? 9}/${indicator.base ?? 26}/${indicator.span ?? 52}`;
   if (indicator.kind === "bollinger") return `${indicator.period ?? 20}/${indicator.deviation ?? 2}`;
   if (indicator.kind === "vwap") return "session";
+  if (indicator.kind === "candlestick") return "latest sequence";
   return `${indicator.period ?? 14}`;
 }
 
@@ -261,5 +262,6 @@ function indicatorIcon(name: string) {
   if (name === "RSI" || name === "Stochastic") return <Gauge size={13} />;
   if (name === "MACD") return <BarChart3 size={13} />;
   if (name === "ATR" || name === "Bollinger Bands") return <Activity size={13} />;
+  if (name === "Candlestick Patterns") return <Target size={13} />;
   return <TrendingUp size={13} />;
 }
