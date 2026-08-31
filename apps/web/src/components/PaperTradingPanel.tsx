@@ -3,6 +3,8 @@ import {
   Activity,
   ArrowUp,
   BrainCircuit,
+  ChevronDown,
+  ChevronRight,
   CircleStop,
   Database,
   FlaskConical,
@@ -70,6 +72,7 @@ export function PaperTradingPanel({
   const [manualStopLoss, setManualStopLoss] = useState("");
   const [manualTakeProfit, setManualTakeProfit] = useState("");
   const [manualNote, setManualNote] = useState("");
+  const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     if (selectedManualSymbol) setManualSymbol(selectedManualSymbol);
     if (!manualEntryDirty) setManualEntry(manualPrice === undefined ? "" : String(manualPrice));
@@ -121,6 +124,16 @@ export function PaperTradingPanel({
           </span>
         </div>
         <div className="paper-actions">
+          <button
+            className="icon-button paper-collapse-button"
+            type="button"
+            title={collapsed ? "Expand bot" : "Fold bot"}
+            aria-label={collapsed ? "Expand bot" : "Fold bot"}
+            aria-expanded={!collapsed}
+            onClick={() => setCollapsed((current) => !current)}
+          >
+            {collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+          </button>
           <button className="icon-text dashboard-return" type="button" onClick={onBackToDashboard}>
             <ArrowUp size={14} />
             Dashboard
@@ -152,7 +165,8 @@ export function PaperTradingPanel({
         </div>
       </header>
 
-      <div className={`paper-status ${engine?.last_error || error ? "error" : engine?.enabled ? "running" : ""}`}>
+      {!collapsed && <div className="paper-body">
+        <div className={`paper-status ${engine?.last_error || error ? "error" : engine?.enabled ? "running" : ""}`}>
         {engine?.enabled ? <Activity size={15} /> : <CircleStop size={15} />}
         <strong>{engine?.enabled ? manual ? "Live price monitoring" : "Scanning and simulating" : manual ? "Manual monitor paused" : "Virtual engine paused"}</strong>
         <span>
@@ -336,7 +350,7 @@ export function PaperTradingPanel({
           </div>
 
           {tab === "open" && (
-            <OpenTrades trades={portfolio.open_positions} onClose={onClose} onNoteSave={onNoteSave} busy={busy} extreme={extreme} />
+            <OpenTrades trades={portfolio.open_positions} onClose={onClose} onNoteSave={onNoteSave} busy={busy} extreme={extreme} manual={manual} />
           )}
           {tab === "history" && <TradeHistory trades={portfolio.closed_trades} extreme={extreme} onNoteSave={onNoteSave} />}
           {tab === "daily" && <DailyReport reports={portfolio.daily_reports} />}
@@ -362,6 +376,7 @@ export function PaperTradingPanel({
       ) : (
         <PaperEmpty text="Connecting to the virtual portfolio." />
       )}
+      </div>}
     </section>
   );
 }
@@ -586,8 +601,8 @@ function ManualTradeForm({
   );
 }
 
-function OpenTrades({ trades, onClose, onNoteSave, busy, extreme }: { trades: PaperTrade[]; onClose: (id: string) => void; onNoteSave?: (tradeId: string, note: string) => void; busy: boolean; extreme: boolean }) {
-  if (!trades.length) return <PaperEmpty text="No actionable signal is open. HOLD signals are observed but never entered." />;
+function OpenTrades({ trades, onClose, onNoteSave, busy, extreme, manual }: { trades: PaperTrade[]; onClose: (id: string) => void; onNoteSave?: (tradeId: string, note: string) => void; busy: boolean; extreme: boolean; manual: boolean }) {
+  if (!trades.length) return <PaperEmpty text={manual ? "No manual virtual positions are open. Submit a BUY or SELL above." : "No actionable signal is open. HOLD signals are observed but never entered."} />;
   return (
     <div className="paper-table-wrap">
       <table className="paper-table">

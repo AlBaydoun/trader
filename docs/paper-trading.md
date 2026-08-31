@@ -147,9 +147,9 @@ execution quality, spread behavior, slippage, latency, or a validated backtest.
 
 `Manual Trading Bot` is a separate paper-only ledger for operator-controlled entries. It does not
 open positions from the automatic strategy and does not share the main `Virtual Trading` history.
-The bot is paused by default. Turn on `Monitoring` when you want its open positions to be marked
-from live MT5 candles and automatically closed when their configured stop-loss, take-profit, or
-time limit is reached. Turning monitoring off pauses those automatic marks and exits; it does not
+The bot is idle until the first manual entry. Opening a position starts `Monitoring` automatically,
+so its live price, unrealized result, stop-loss, take-profit, and time limit can react without an
+extra activation step. Turning monitoring off pauses those automatic marks and exits; it does not
 delete trades or prevent you from opening or closing paper positions from the panel.
 
 Its chart searches the full tradeable symbol catalog exposed by the connected MT5 terminal. Search

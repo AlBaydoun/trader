@@ -6,6 +6,7 @@ import {
 } from "./components/ChartPanel";
 import { ExtremeAlertsPanel } from "./components/ExtremeAlertsPanel";
 import { ManualTradingBotChart } from "./components/ManualTradingBotChart";
+import { PaperBotDock } from "./components/PaperBotDock";
 import { PaperTradingPanel } from "./components/PaperTradingPanel";
 import { SignalRail } from "./components/SignalRail";
 import { StrategyLabPanel } from "./components/StrategyLabPanel";
@@ -169,6 +170,7 @@ export function App() {
   const [extremeBusy, setExtremeBusy] = useState(false);
   const extremeAlertIdsRef = useRef<Set<string>>(new Set());
   const lastAlertRef = useRef<string>("");
+  const manualPaperMutationRef = useRef(0);
 
   const activeSignal = signals[activeSymbol] ?? Object.values(signals)[0];
 
@@ -227,8 +229,9 @@ export function App() {
   }, [refreshPaper]);
 
   const refreshManualPaper = useCallback(async () => {
+    const revision = manualPaperMutationRef.current;
     const portfolio = await getManualPaperPortfolio().catch(() => null);
-    if (!portfolio) return;
+    if (!portfolio || revision !== manualPaperMutationRef.current) return;
     setManualPaperPortfolio(portfolio);
     setManualBotTimeframe(portfolio.engine.timeframe as ManualPaperTradeRequest["timeframe"]);
   }, []);
@@ -506,6 +509,7 @@ export function App() {
   }
 
   async function controlManualPaper(control: PaperControl) {
+    manualPaperMutationRef.current += 1;
     setManualPaperBusy(true);
     setManualPaperError("");
     try {
@@ -515,18 +519,27 @@ export function App() {
     } catch (error) {
       setManualPaperError(error instanceof Error ? error.message : "Manual bot control update failed.");
     } finally {
+      manualPaperMutationRef.current += 1;
       setManualPaperBusy(false);
     }
   }
 
   async function openManualTradingBotTradeNow(request: ManualPaperTradeRequest) {
+    manualPaperMutationRef.current += 1;
     setManualPaperBusy(true);
     setManualPaperError("");
     try {
-      setManualPaperPortfolio(await openManualPaperTrade(request));
+      const opened = await openManualPaperTrade(request);
+      if (opened.engine.enabled) {
+        setManualPaperPortfolio(opened);
+      } else {
+        // Start monitoring after the operator creates a position so live P/L and SL/TP react immediately.
+        setManualPaperPortfolio(await updateManualPaperControl({ enabled: true }));
+      }
     } catch (error) {
       setManualPaperError(error instanceof Error ? error.message : "Manual virtual trade could not open.");
     } finally {
+      manualPaperMutationRef.current += 1;
       setManualPaperBusy(false);
     }
   }
@@ -544,6 +557,7 @@ export function App() {
   }
 
   async function saveManualTradeNote(tradeId: string, note: string) {
+    manualPaperMutationRef.current += 1;
     setManualPaperBusy(true);
     setManualPaperError("");
     try {
@@ -551,11 +565,13 @@ export function App() {
     } catch (error) {
       setManualPaperError(error instanceof Error ? error.message : "Manual trade note could not be saved.");
     } finally {
+      manualPaperMutationRef.current += 1;
       setManualPaperBusy(false);
     }
   }
 
   async function runManualTradingCycle() {
+    manualPaperMutationRef.current += 1;
     setManualPaperBusy(true);
     setManualPaperError("");
     try {
@@ -563,11 +579,13 @@ export function App() {
     } catch (error) {
       setManualPaperError(error instanceof Error ? error.message : "Manual bot monitor cycle failed.");
     } finally {
+      manualPaperMutationRef.current += 1;
       setManualPaperBusy(false);
     }
   }
 
   async function closeManualTradingPosition(tradeId: string) {
+    manualPaperMutationRef.current += 1;
     setManualPaperBusy(true);
     setManualPaperError("");
     try {
@@ -575,12 +593,14 @@ export function App() {
     } catch (error) {
       setManualPaperError(error instanceof Error ? error.message : "Manual virtual position could not close.");
     } finally {
+      manualPaperMutationRef.current += 1;
       setManualPaperBusy(false);
     }
   }
 
   async function resetManualTradingPortfolio() {
     if (!window.confirm("Reset all Manual Trading Bot trades, history, and results?")) return;
+    manualPaperMutationRef.current += 1;
     setManualPaperBusy(true);
     setManualPaperError("");
     try {
@@ -588,6 +608,7 @@ export function App() {
     } catch (error) {
       setManualPaperError(error instanceof Error ? error.message : "Manual bot reset failed.");
     } finally {
+      manualPaperMutationRef.current += 1;
       setManualPaperBusy(false);
     }
   }
@@ -1044,6 +1065,179 @@ export function App() {
     scrollToPanel("extreme-alerts");
   }
 
+  const paperBotPanels = [
+    {
+      id: "paper",
+      label: "Virtual Trading",
+      node: (
+        <PaperTradingPanel
+          portfolio={paperPortfolio}
+          busy={paperBusy}
+          error={paperError}
+          onNoteSave={(tradeId, note) => void savePaperTradeNote(tradeId, note)}
+          onControl={(control) => void controlPaper(control)}
+          onRun={() => void runVirtualCycle()}
+          onClose={(tradeId) => void closeVirtualPosition(tradeId)}
+          onReset={() => void resetVirtualPortfolio()}
+          onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+        />
+      )
+    },
+    {
+      id: "manual",
+      label: "Manual Trading Bot",
+      node: (
+        <PaperTradingPanel
+          variant="manual"
+          portfolio={manualPaperPortfolio}
+          busy={manualPaperBusy}
+          error={manualPaperError}
+          manualSymbol={manualBotSymbol}
+          manualPrice={manualBotPrice}
+          manualTimeframe={manualBotTimeframe}
+          liveChart={(
+            <ManualTradingBotChart
+              symbol={manualBotSymbol}
+              timeframe={manualBotTimeframe}
+              onSymbolChange={setManualBotSymbol}
+              onTimeframeChange={(nextTimeframe) => {
+                setManualBotTimeframe(nextTimeframe);
+                void controlManualPaper({ timeframe: nextTimeframe, timeframe_mode: "manual" });
+              }}
+              onPriceChange={setManualBotPrice}
+            />
+          )}
+          onManualOpen={(request) => void openManualTradingBotTradeNow(request)}
+          onNoteSave={(tradeId, note) => void saveManualTradeNote(tradeId, note)}
+          onControl={(control) => void controlManualPaper(control)}
+          onRun={() => void runManualTradingCycle()}
+          onClose={(tradeId) => void closeManualTradingPosition(tradeId)}
+          onReset={() => void resetManualTradingPortfolio()}
+          onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+        />
+      )
+    },
+    {
+      id: "jdub",
+      label: "Jdub Traders",
+      node: (
+        <PaperTradingPanel
+          variant="jdub"
+          portfolio={jdubPaperPortfolio}
+          busy={jdubPaperBusy}
+          error={jdubPaperError}
+          onControl={(control) => void controlJdubPaper(control)}
+          onRun={() => void runJdubVirtualCycle()}
+          onClose={(tradeId) => void closeJdubVirtualPosition(tradeId)}
+          onReset={() => void resetJdubVirtualPortfolio()}
+          onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+        />
+      )
+    },
+    {
+      id: "candlestick",
+      label: "Candlestick Main BUY + SELL",
+      node: (
+        <PaperTradingPanel
+          variant="candlestick"
+          portfolio={candlestickPaperPortfolio}
+          busy={candlestickPaperBusy}
+          error={candlestickPaperError}
+          onControl={(control) => void controlCandlestickMain(control)}
+          onRun={() => void runCandlestickMainCycle()}
+          onClose={(tradeId) => void closeCandlestickMainPosition(tradeId)}
+          onReset={() => void resetCandlestickMainPortfolio()}
+          onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+        />
+      )
+    },
+    {
+      id: "candlestick-buy",
+      label: "Bullish Engulfing BUY Bot",
+      node: (
+        <PaperTradingPanel
+          variant="candlestick-buy"
+          portfolio={candlestickBuyPortfolio}
+          busy={candlestickBuyBusy}
+          error={candlestickBuyError}
+          onControl={(control) => void controlCandlestickBuy(control)}
+          onRun={() => void runCandlestickBuyCycle()}
+          onClose={(tradeId) => void closeCandlestickBuyPosition(tradeId)}
+          onReset={() => void resetCandlestickBuyPortfolio()}
+          onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+        />
+      )
+    },
+    {
+      id: "candlestick-sell",
+      label: "Bearish Engulfing SELL Bot",
+      node: (
+        <PaperTradingPanel
+          variant="candlestick-sell"
+          portfolio={candlestickSellPortfolio}
+          busy={candlestickSellBusy}
+          error={candlestickSellError}
+          onControl={(control) => void controlCandlestickSell(control)}
+          onRun={() => void runCandlestickSellCycle()}
+          onClose={(tradeId) => void closeCandlestickSellPosition(tradeId)}
+          onReset={() => void resetCandlestickSellPortfolio()}
+          onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+        />
+      )
+    },
+    {
+      id: "video-strategy",
+      label: "Video MA + MTF MACD Bot",
+      node: (
+        <PaperTradingPanel
+          variant="video-strategy"
+          portfolio={videoStrategyPortfolio}
+          busy={videoStrategyBusy}
+          error={videoStrategyError}
+          onControl={(control) => void controlVideoStrategy(control)}
+          onRun={() => void runVideoStrategyCycle()}
+          onClose={(tradeId) => void closeVideoStrategyPosition(tradeId)}
+          onReset={() => void resetVideoStrategyPortfolio()}
+          onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+        />
+      )
+    },
+    {
+      id: "rigorgate",
+      label: "RigorGate",
+      node: (
+        <PaperTradingPanel
+          variant="rigorgate"
+          portfolio={rigorGatePaperPortfolio}
+          busy={rigorGatePaperBusy}
+          error={rigorGatePaperError}
+          onControl={(control) => void controlRigorGatePaper(control)}
+          onRun={() => void runRigorGateVirtualCycle()}
+          onClose={(tradeId) => void closeRigorGateVirtualPosition(tradeId)}
+          onReset={() => void resetRigorGateVirtualPortfolio()}
+          onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+        />
+      )
+    },
+    {
+      id: "extreme",
+      label: "Extreme Virtual Trading",
+      node: (
+        <PaperTradingPanel
+          variant="extreme"
+          portfolio={extremePaperPortfolio}
+          busy={extremePaperBusy}
+          error={extremePaperError}
+          onControl={(control) => void controlExtremePaper(control)}
+          onRun={() => void runExtremeVirtualCycle()}
+          onClose={(tradeId) => void closeExtremeVirtualPosition(tradeId)}
+          onReset={() => void resetExtremeVirtualPortfolio()}
+          onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+        />
+      )
+    }
+  ];
+
   return (
     <main className="app-shell">
       <SymbolDrawer
@@ -1141,111 +1335,6 @@ export function App() {
           onRunBacktest={() => void runBacktest()}
         />
       </div>
-      <PaperTradingPanel
-        portfolio={paperPortfolio}
-        busy={paperBusy}
-        error={paperError}
-        onNoteSave={(tradeId, note) => void savePaperTradeNote(tradeId, note)}
-        onControl={(control) => void controlPaper(control)}
-        onRun={() => void runVirtualCycle()}
-        onClose={(tradeId) => void closeVirtualPosition(tradeId)}
-        onReset={() => void resetVirtualPortfolio()}
-        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
-      />
-      <PaperTradingPanel
-        variant="manual"
-        portfolio={manualPaperPortfolio}
-        busy={manualPaperBusy}
-        error={manualPaperError}
-        manualSymbol={manualBotSymbol}
-        manualPrice={manualBotPrice}
-        manualTimeframe={manualBotTimeframe}
-        liveChart={(
-          <ManualTradingBotChart
-            symbol={manualBotSymbol}
-            timeframe={manualBotTimeframe}
-            onSymbolChange={setManualBotSymbol}
-            onTimeframeChange={(nextTimeframe) => {
-              setManualBotTimeframe(nextTimeframe);
-              void controlManualPaper({ timeframe: nextTimeframe, timeframe_mode: "manual" });
-            }}
-            onPriceChange={setManualBotPrice}
-          />
-        )}
-        onManualOpen={(request) => void openManualTradingBotTradeNow(request)}
-        onNoteSave={(tradeId, note) => void saveManualTradeNote(tradeId, note)}
-        onControl={(control) => void controlManualPaper(control)}
-        onRun={() => void runManualTradingCycle()}
-        onClose={(tradeId) => void closeManualTradingPosition(tradeId)}
-        onReset={() => void resetManualTradingPortfolio()}
-        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
-      />
-      <PaperTradingPanel
-        variant="jdub"
-        portfolio={jdubPaperPortfolio}
-        busy={jdubPaperBusy}
-        error={jdubPaperError}
-        onControl={(control) => void controlJdubPaper(control)}
-        onRun={() => void runJdubVirtualCycle()}
-        onClose={(tradeId) => void closeJdubVirtualPosition(tradeId)}
-        onReset={() => void resetJdubVirtualPortfolio()}
-        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
-      />
-      <PaperTradingPanel
-        variant="candlestick"
-        portfolio={candlestickPaperPortfolio}
-        busy={candlestickPaperBusy}
-        error={candlestickPaperError}
-        onControl={(control) => void controlCandlestickMain(control)}
-        onRun={() => void runCandlestickMainCycle()}
-        onClose={(tradeId) => void closeCandlestickMainPosition(tradeId)}
-        onReset={() => void resetCandlestickMainPortfolio()}
-        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
-      />
-      <PaperTradingPanel
-        variant="candlestick-buy"
-        portfolio={candlestickBuyPortfolio}
-        busy={candlestickBuyBusy}
-        error={candlestickBuyError}
-        onControl={(control) => void controlCandlestickBuy(control)}
-        onRun={() => void runCandlestickBuyCycle()}
-        onClose={(tradeId) => void closeCandlestickBuyPosition(tradeId)}
-        onReset={() => void resetCandlestickBuyPortfolio()}
-        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
-      />
-      <PaperTradingPanel
-        variant="candlestick-sell"
-        portfolio={candlestickSellPortfolio}
-        busy={candlestickSellBusy}
-        error={candlestickSellError}
-        onControl={(control) => void controlCandlestickSell(control)}
-        onRun={() => void runCandlestickSellCycle()}
-        onClose={(tradeId) => void closeCandlestickSellPosition(tradeId)}
-        onReset={() => void resetCandlestickSellPortfolio()}
-        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
-      />
-      <PaperTradingPanel
-        variant="video-strategy"
-        portfolio={videoStrategyPortfolio}
-        busy={videoStrategyBusy}
-        error={videoStrategyError}
-        onControl={(control) => void controlVideoStrategy(control)}
-        onRun={() => void runVideoStrategyCycle()}
-        onClose={(tradeId) => void closeVideoStrategyPosition(tradeId)}
-        onReset={() => void resetVideoStrategyPortfolio()}
-        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
-      />
-      <PaperTradingPanel
-        variant="rigorgate"
-        portfolio={rigorGatePaperPortfolio}
-        busy={rigorGatePaperBusy}
-        error={rigorGatePaperError}
-        onControl={(control) => void controlRigorGatePaper(control)}
-        onRun={() => void runRigorGateVirtualCycle()}
-        onClose={(tradeId) => void closeRigorGateVirtualPosition(tradeId)}
-        onReset={() => void resetRigorGateVirtualPortfolio()}
-        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
-      />
       <ExtremeAlertsPanel
         scan={extremeScan}
         busy={extremeBusy}
@@ -1265,17 +1354,7 @@ export function App() {
         onControl={(strategyId, control) => void controlStrategyLab(strategyId, control)}
         onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
       />
-      <PaperTradingPanel
-        variant="extreme"
-        portfolio={extremePaperPortfolio}
-        busy={extremePaperBusy}
-        error={extremePaperError}
-        onControl={(control) => void controlExtremePaper(control)}
-        onRun={() => void runExtremeVirtualCycle()}
-        onClose={(tradeId) => void closeExtremeVirtualPosition(tradeId)}
-        onReset={() => void resetExtremeVirtualPortfolio()}
-        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
-      />
+      <PaperBotDock bots={paperBotPanels} />
     </main>
   );
 }

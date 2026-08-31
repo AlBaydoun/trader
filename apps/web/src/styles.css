@@ -2408,6 +2408,110 @@ button:disabled {
   background: #11171b;
 }
 
+.paper-bot-dock {
+  display: grid;
+  gap: 10px;
+  margin: 0 12px 18px;
+}
+
+.paper-bot-dock-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 8px 10px;
+  border-top: 1px solid #34424c;
+  border-bottom: 1px solid #26313a;
+  color: #8a98a6;
+  background: #10161a;
+  font-size: 10px;
+}
+
+.paper-bot-dock-heading strong,
+.paper-bot-dock-heading span {
+  display: block;
+}
+
+.paper-bot-dock-heading strong {
+  color: #dce5eb;
+  font-size: 12px;
+}
+
+.paper-bot-dock-heading div span {
+  margin-top: 3px;
+}
+
+.paper-bot-dock-heading > span {
+  color: #62e0b8;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.paper-bot-slot {
+  min-width: 0;
+}
+
+.paper-bot-slot.dragging {
+  opacity: 0.58;
+}
+
+.paper-bot-order-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 30px;
+  padding: 3px 8px 3px 10px;
+  border: 1px solid #34424c;
+  border-bottom: 0;
+  color: #8a98a6;
+  background: #0d1317;
+  font-size: 10px;
+}
+
+.paper-bot-drag-handle,
+.paper-bot-order-actions {
+  display: flex;
+  align-items: center;
+}
+
+.paper-bot-drag-handle {
+  gap: 6px;
+  min-width: 0;
+  cursor: grab;
+}
+
+.paper-bot-drag-handle:active {
+  cursor: grabbing;
+}
+
+.paper-bot-drag-handle svg {
+  flex: 0 0 auto;
+  color: #536b92;
+}
+
+.paper-bot-drag-handle strong {
+  overflow: hidden;
+  color: #c8d2d9;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paper-bot-order-actions {
+  gap: 3px;
+}
+
+.paper-bot-order-actions .icon-button {
+  width: 25px;
+  height: 25px;
+}
+
+.paper-bot-slot > .paper-workspace {
+  margin: 0;
+  border-top: 0;
+}
+
 .paper-header {
   display: flex;
   align-items: center;
@@ -2476,6 +2580,10 @@ button:disabled {
 
 .paper-actions {
   gap: 8px;
+}
+
+.paper-collapse-button {
+  color: #b8cdf7;
 }
 
 .paper-toggle {
@@ -4622,6 +4730,16 @@ button:disabled {
     margin: 0 8px 12px;
   }
 
+  .paper-bot-dock {
+    margin: 0 8px 12px;
+  }
+
+  .paper-bot-dock-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
   .extreme-workspace {
     margin: 0 8px 16px;
     scroll-margin-top: 320px;
@@ -4694,7 +4812,7 @@ button:disabled {
 
   .paper-actions {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto auto auto;
   }
 
   .paper-status {
