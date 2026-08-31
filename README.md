@@ -51,7 +51,8 @@ This project is **not** a profit guarantee and does not ship with live trading e
 - Visible active strategy definition, factor weights, entry threshold, stop model, and target model.
 - Backtesting service for strategy validation before deployment.
 - Continuous scanner service shape for background monitoring.
-- Alert hooks for browser audio, speech synthesis, webhooks, and future mobile push.
+- Alert hooks for browser audio, speech synthesis, webhooks, and MT5 push notifications to iPhone
+  and Android through the desktop/VPS terminal.
 - Docker Compose deployment for API, web, Redis, Postgres, Prometheus, and Grafana.
 - CI for Python unit tests and frontend type/lint/build checks.
 
@@ -125,6 +126,7 @@ BROKER_ADAPTER=paper
 - [Deployment Guide](docs/deployment.md)
 - [Risk Guardrails](docs/risk.md)
 - [MT5 and JustMarkets Integration](docs/mt5-justmarkets.md)
+- [MT5 Mobile Alerts for iPhone and Android](docs/mobile-mt5-alerts.md)
 - [News Analysis](docs/news-analysis.md)
 - [Whole-Market Scanner](docs/market-scanner.md)
 - [Virtual Paper Trading](docs/paper-trading.md)

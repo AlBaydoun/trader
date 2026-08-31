@@ -97,6 +97,18 @@ default; when enabled, alerts describe the pattern, symbol, timeframe, and close
 completed candle. Sound, push, and email delivery still depend on the corresponding MT5 terminal
 notifications settings.
 
+### Using it from iPhone or Android
+
+The custom indicator cannot be installed inside the MT5 iPhone or Android app. Those apps are the
+mobile alert and account-management clients; the `.mq5/.ex5` indicator must run in desktop MT5 on
+the Windows PC or an always-on Windows VPS. The same desktop indicator serves both phone types.
+
+Open the phone's MT5 **Messages** section, copy its **MetaQuotes ID**, then enter that ID in the
+desktop terminal under **Tools -> Options -> Notifications** and use **Test**. In the indicator
+Inputs, set `EnableAlerts=true` and `EnablePushAlert=true`. Configure each phone's ID separately
+if both iPhone and Android should receive the same alert. Full activation instructions are in
+[MT5 Mobile Alerts for iPhone and Android](mobile-mt5-alerts.md).
+
 In the active JustMarkets terminal, the source and compiled indicator are installed under:
 
 ```text
