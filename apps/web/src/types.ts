@@ -320,6 +320,7 @@ export interface PaperTrade {
   signal_price: number | null;
   signal_level: string | null;
   signal_recommendation: string | null;
+  note: string;
 }
 
 export interface PaperDecision {
@@ -465,6 +466,17 @@ export interface PaperControl {
   timeframe_mode?: "auto" | "manual";
   minimum_opportunity_score?: number;
   max_open_positions?: number;
+}
+
+export interface ManualPaperTradeRequest {
+  symbol: string;
+  direction: "buy" | "sell";
+  volume: number;
+  entry?: number;
+  stop_loss: number;
+  take_profit: number;
+  timeframe: "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
+  note: string;
 }
 
 export type ExtremeLevel = "upper_85" | "lower_15" | "neutral";

@@ -134,6 +134,24 @@ Use the `Paper` button in the header to open the virtual results section. It sho
 and clears the virtual ledger only. The auto toggle pauses or resumes future virtual cycles without
 changing historical results.
 
+## Manual Virtual Trades
+
+The main `Virtual Trading` panel includes a `Manual paper trade` form. It is always paper-only and
+does not submit anything to MT5 or JustMarkets. Use the header toggle to pause or resume the
+automatic scanner, then use the form when you want to control an entry yourself. You can choose:
+
+- Symbol and BUY or SELL direction.
+- Volume and execution timeframe.
+- Entry price, or leave it blank to use the latest available scanned close.
+- Stop-loss and take-profit. The service rejects levels on the wrong side of the entry.
+- A free-form note describing the setup, decision, or review.
+
+Manual trades use the same virtual mark-to-market, stop/target, close, equity, daily-report, and
+learning lifecycle as automatic paper trades. Their source is recorded as `manual`, and notes can
+be edited from both the Open and History tables. Notes are persisted with the paper ledger and
+survive API restarts. The corresponding API routes are `POST /paper/manual/open` and
+`POST /paper/positions/{trade_id}/note`.
+
 ## Safety Boundary
 
 The paper service is separate from the live broker adapter. The API's live trading lock still

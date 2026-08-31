@@ -1,6 +1,8 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from app.domain.models import Candle, Direction, SignalReason
 from app.services.market_scanner import MarketOpportunity, MarketScanResult
 from app.services.paper_trading import PaperTradingService
@@ -113,6 +115,51 @@ def test_virtual_ledger_persists_without_broker_credentials(tmp_path: Path) -> N
     assert "password" not in path.read_text(encoding="utf-8").lower()
     assert reloaded.persistence.status == "saved"
     assert reloaded.persistence.state_version == 2
+
+
+def test_manual_trade_persists_levels_and_note(tmp_path: Path) -> None:
+    path = tmp_path / "manual.json"
+    service = make_service(path)
+
+    opened = service.place_manual_order(
+        symbol="XAUUSD",
+        direction=Direction.buy,
+        volume=2,
+        entry=100,
+        stop_loss=99,
+        take_profit=102,
+        timeframe="5m",
+        source_account_id="test-account",
+        note="Breakout after retest",
+    )
+
+    trade = opened.open_positions[0]
+    assert trade.source == "manual"
+    assert trade.timeframe == "5m"
+    assert trade.stop_loss == 99
+    assert trade.take_profit == 102
+    assert trade.note == "Breakout after retest"
+
+    restored = make_service(path).snapshot()
+    assert restored.open_positions[0].note == "Breakout after retest"
+
+    updated = service.update_trade_note(trade.id, "Updated after review")
+    assert updated.open_positions[0].note == "Updated after review"
+
+
+def test_manual_trade_requires_directional_protection(tmp_path: Path) -> None:
+    service = make_service(tmp_path / "manual-invalid.json")
+
+    with pytest.raises(ValueError, match="BUY trades require"):
+        service.place_manual_order(
+            symbol="XAUUSD",
+            direction=Direction.buy,
+            volume=1,
+            entry=100,
+            stop_loss=101,
+            take_profit=102,
+            timeframe="1m",
+        )
 
 
 def test_timeframe_selection_mode_is_persisted(tmp_path: Path) -> None:

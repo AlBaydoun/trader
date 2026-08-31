@@ -9,9 +9,17 @@ import {
   Play,
   RefreshCcw,
   RotateCcw,
-  ShieldCheck
+  Save,
+  ShieldCheck,
+  StickyNote
 } from "lucide-react";
-import type { PaperControl, PaperEquityPoint, PaperPortfolio, PaperTrade } from "../types";
+import type {
+  ManualPaperTradeRequest,
+  PaperControl,
+  PaperEquityPoint,
+  PaperPortfolio,
+  PaperTrade
+} from "../types";
 
 type PaperTab = "open" | "history" | "daily" | "learning" | "log";
 type PaperTradingVariant = "market" | "jdub" | "rigorgate" | "extreme" | "candlestick" | "candlestick-buy" | "candlestick-sell" | "video-strategy";
@@ -26,6 +34,12 @@ interface PaperTradingPanelProps {
   onClose: (tradeId: string) => void;
   onReset: () => void;
   onBackToDashboard: () => void;
+  onManualOpen?: (request: ManualPaperTradeRequest) => void;
+  onNoteSave?: (tradeId: string, note: string) => void;
+  manualSymbols?: string[];
+  manualSymbol?: string;
+  manualPrice?: number;
+  manualTimeframe?: PaperControl["timeframe"];
 }
 
 export function PaperTradingPanel({
@@ -37,9 +51,27 @@ export function PaperTradingPanel({
   onRun,
   onClose,
   onReset,
-  onBackToDashboard
+  onBackToDashboard,
+  onManualOpen,
+  onNoteSave,
+  manualSymbols = [],
+  manualSymbol: selectedManualSymbol,
+  manualPrice,
+  manualTimeframe = "1m"
 }: PaperTradingPanelProps) {
   const [tab, setTab] = useState<PaperTab>("open");
+  const [manualDirection, setManualDirection] = useState<ManualPaperTradeRequest["direction"]>("buy");
+  const [manualSymbol, setManualSymbol] = useState(selectedManualSymbol ?? "");
+  const [manualVolume, setManualVolume] = useState("1");
+  const [manualEntry, setManualEntry] = useState(manualPrice?.toString() ?? "");
+  const [manualEntryDirty, setManualEntryDirty] = useState(false);
+  const [manualStopLoss, setManualStopLoss] = useState("");
+  const [manualTakeProfit, setManualTakeProfit] = useState("");
+  const [manualNote, setManualNote] = useState("");
+  useEffect(() => {
+    if (selectedManualSymbol) setManualSymbol(selectedManualSymbol);
+    if (!manualEntryDirty && manualPrice !== undefined) setManualEntry(String(manualPrice));
+  }, [manualEntryDirty, manualPrice, selectedManualSymbol]);
   const extreme = variant === "extreme";
   const jdub = variant === "jdub";
   const rigorgate = variant === "rigorgate";
@@ -134,6 +166,44 @@ export function PaperTradingPanel({
           </b>
         )}
       </div>
+
+      {variant === "market" && onManualOpen && (
+        <ManualTradeForm
+          busy={busy}
+          direction={manualDirection}
+          symbol={manualSymbol}
+          symbols={manualSymbols}
+          volume={manualVolume}
+          entry={manualEntry}
+          stopLoss={manualStopLoss}
+          takeProfit={manualTakeProfit}
+          note={manualNote}
+          timeframe={manualTimeframe}
+          onDirectionChange={setManualDirection}
+          onSymbolChange={setManualSymbol}
+          onVolumeChange={setManualVolume}
+          onEntryChange={(value) => {
+            setManualEntry(value);
+            setManualEntryDirty(true);
+          }}
+          onStopLossChange={setManualStopLoss}
+          onTakeProfitChange={setManualTakeProfit}
+          onNoteChange={setManualNote}
+          onSubmit={() => {
+            const entry = manualEntry.trim() ? Number(manualEntry) : undefined;
+            onManualOpen({
+              symbol: manualSymbol.trim(),
+              direction: manualDirection,
+              volume: Number(manualVolume),
+              entry,
+              stop_loss: Number(manualStopLoss),
+              take_profit: Number(manualTakeProfit),
+              timeframe: manualTimeframe,
+              note: manualNote
+            });
+          }}
+        />
+      )}
 
       {metrics && engine ? (
         <>
@@ -261,9 +331,9 @@ export function PaperTradingPanel({
           </div>
 
           {tab === "open" && (
-            <OpenTrades trades={portfolio.open_positions} onClose={onClose} busy={busy} extreme={extreme} />
+            <OpenTrades trades={portfolio.open_positions} onClose={onClose} onNoteSave={onNoteSave} busy={busy} extreme={extreme} />
           )}
-          {tab === "history" && <TradeHistory trades={portfolio.closed_trades} extreme={extreme} />}
+          {tab === "history" && <TradeHistory trades={portfolio.closed_trades} extreme={extreme} onNoteSave={onNoteSave} />}
           {tab === "daily" && <DailyReport reports={portfolio.daily_reports} />}
           {tab === "learning" && <LearningPanel learning={portfolio.learning} />}
           {tab === "log" && (
@@ -401,12 +471,122 @@ function LearningPanel({ learning }: { learning: PaperPortfolio["learning"] }) {
   );
 }
 
-function OpenTrades({ trades, onClose, busy, extreme }: { trades: PaperTrade[]; onClose: (id: string) => void; busy: boolean; extreme: boolean }) {
+interface ManualTradeFormProps {
+  busy: boolean;
+  direction: ManualPaperTradeRequest["direction"];
+  symbol: string;
+  symbols: string[];
+  volume: string;
+  entry: string;
+  stopLoss: string;
+  takeProfit: string;
+  note: string;
+  timeframe: ManualPaperTradeRequest["timeframe"];
+  onDirectionChange: (direction: ManualPaperTradeRequest["direction"]) => void;
+  onSymbolChange: (value: string) => void;
+  onVolumeChange: (value: string) => void;
+  onEntryChange: (value: string) => void;
+  onStopLossChange: (value: string) => void;
+  onTakeProfitChange: (value: string) => void;
+  onNoteChange: (value: string) => void;
+  onSubmit: () => void;
+}
+
+function ManualTradeForm({
+  busy,
+  direction,
+  symbol,
+  symbols,
+  volume,
+  entry,
+  stopLoss,
+  takeProfit,
+  note,
+  timeframe,
+  onDirectionChange,
+  onSymbolChange,
+  onVolumeChange,
+  onEntryChange,
+  onStopLossChange,
+  onTakeProfitChange,
+  onNoteChange,
+  onSubmit
+}: ManualTradeFormProps) {
+  return (
+    <section className="manual-trade-panel" aria-label="Manual paper trading">
+      <div className="manual-trade-heading">
+        <div>
+          <strong><StickyNote size={15} /> Manual paper trade</strong>
+          <span>Pause the bot to trade entirely yourself, or keep it running alongside your entries.</span>
+        </div>
+        <b>Virtual only · {formatTimeframe(timeframe)}</b>
+      </div>
+      <form
+        className="manual-trade-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSubmit();
+        }}
+      >
+        <label>
+          <span>Symbol</span>
+          <input
+            list="manual-symbol-options"
+            value={symbol}
+            required
+            maxLength={40}
+            placeholder="XAUUSD"
+            onChange={(event) => onSymbolChange(event.target.value)}
+          />
+          <datalist id="manual-symbol-options">
+            {symbols.map((item) => <option value={item} key={item} />)}
+          </datalist>
+        </label>
+        <div className="manual-direction-field">
+          <span>Direction</span>
+          <div className="segmented manual-direction" aria-label="Manual trade direction">
+            <button type="button" className={direction === "buy" ? "active buy" : "buy"} onClick={() => onDirectionChange("buy")}>BUY</button>
+            <button type="button" className={direction === "sell" ? "active sell" : "sell"} onClick={() => onDirectionChange("sell")}>SELL</button>
+          </div>
+        </div>
+        <label>
+          <span>Volume</span>
+          <input type="number" min="0.00000001" step="any" value={volume} required onChange={(event) => onVolumeChange(event.target.value)} />
+        </label>
+        <label>
+          <span>Entry price <small>(blank = current)</small></span>
+          <input type="number" min="0.00000001" step="any" value={entry} placeholder="Current price" onChange={(event) => onEntryChange(event.target.value)} />
+        </label>
+        <label>
+          <span>Stop-loss</span>
+          <input type="number" min="0.00000001" step="any" value={stopLoss} required placeholder={direction === "buy" ? "Below entry" : "Above entry"} onChange={(event) => onStopLossChange(event.target.value)} />
+        </label>
+        <label>
+          <span>Take-profit</span>
+          <input type="number" min="0.00000001" step="any" value={takeProfit} required placeholder={direction === "buy" ? "Above entry" : "Below entry"} onChange={(event) => onTakeProfitChange(event.target.value)} />
+        </label>
+        <label className="manual-note-field">
+          <span>Trade note</span>
+          <input type="text" maxLength={2000} value={note} placeholder="Why am I taking this trade?" onChange={(event) => onNoteChange(event.target.value)} />
+        </label>
+        <div className="manual-trade-submit">
+          <span>Stops are required and saved with the trade.</span>
+          <button className={`icon-text ${direction === "buy" ? "buy-button" : "sell-button"}`} type="submit" disabled={busy}>
+            {busy ? <RefreshCcw className="spin" size={15} /> : <Play size={15} />}
+            Open virtual {direction.toUpperCase()}
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function OpenTrades({ trades, onClose, onNoteSave, busy, extreme }: { trades: PaperTrade[]; onClose: (id: string) => void; onNoteSave?: (tradeId: string, note: string) => void; busy: boolean; extreme: boolean }) {
   if (!trades.length) return <PaperEmpty text="No actionable signal is open. HOLD signals are observed but never entered." />;
   return (
     <div className="paper-table-wrap">
       <table className="paper-table">
-        <thead><tr><th>Market</th><th>Timeframe</th><th>{extreme ? "Signal entry / now" : "Entry / current"}</th><th>Stop / target</th><th>Virtual size</th><th>Result</th><th>Signal</th><th>{extreme ? "Since signal" : "Opened"}</th><th /></tr></thead>
+        <thead><tr><th>Market</th><th>Timeframe</th><th>{extreme ? "Signal entry / now" : "Entry / current"}</th><th>Stop / target</th><th>Virtual size</th><th>Result</th><th>Signal</th><th>{extreme ? "Since signal" : "Opened"}</th><th>Note</th><th /></tr></thead>
         <tbody>{trades.map((trade) => (
           <tr key={trade.id}>
             <td><strong>{trade.symbol}</strong><span className={`side ${trade.direction}`}>{trade.direction}</span></td>
@@ -417,6 +597,7 @@ function OpenTrades({ trades, onClose, busy, extreme }: { trades: PaperTrade[]; 
             <td className={pnlClass(trade.unrealized_pnl)}><strong>{signedMoney(trade.unrealized_pnl)}</strong><span>{trade.r_multiple.toFixed(2)}R</span></td>
             <td>{extreme && trade.signal_level ? <strong>{levelLabel(trade.signal_level)}</strong> : `${Math.round(trade.confidence * 100)}%`}<span title={trade.signal_recommendation ?? trade.reasons.join(" ")}>{extreme ? "Confirmed RSI + MACD + MA" : `Score ${trade.opportunity_score.toFixed(1)}`}</span></td>
             <td>{age(signalTime(trade))}<span>{dateTime(signalTime(trade))}</span></td>
+            <td><NoteCell trade={trade} onSave={onNoteSave} busy={busy} /></td>
             <td><button className="icon-button compact-icon" title="Close virtual position" aria-label={`Close virtual ${trade.symbol} position`} disabled={busy} onClick={() => onClose(trade.id)}><CircleStop size={14} /></button></td>
           </tr>
         ))}</tbody>
@@ -425,12 +606,12 @@ function OpenTrades({ trades, onClose, busy, extreme }: { trades: PaperTrade[]; 
   );
 }
 
-function TradeHistory({ trades, extreme }: { trades: PaperTrade[]; extreme: boolean }) {
+function TradeHistory({ trades, extreme, onNoteSave }: { trades: PaperTrade[]; extreme: boolean; onNoteSave?: (tradeId: string, note: string) => void }) {
   if (!trades.length) return <PaperEmpty text="Completed virtual trades will appear here with their full result." />;
   return (
     <div className="paper-table-wrap">
       <table className="paper-table history-table">
-        <thead><tr><th>Market</th><th>Timeframe</th><th>{extreme ? "Signal / fill / exit" : "Entry / exit"}</th><th>Net result</th><th>Excursion</th><th>Costs</th><th>Exit</th><th>Duration</th></tr></thead>
+        <thead><tr><th>Market</th><th>Timeframe</th><th>{extreme ? "Signal / fill / exit" : "Entry / exit"}</th><th>Net result</th><th>Excursion</th><th>Costs</th><th>Exit</th><th>Duration</th><th>Note</th></tr></thead>
         <tbody>{trades.map((trade) => (
           <tr key={trade.id}>
             <td><strong>{trade.symbol}</strong><span className={`side ${trade.direction}`}>{trade.direction}</span></td>
@@ -441,9 +622,39 @@ function TradeHistory({ trades, extreme }: { trades: PaperTrade[]; extreme: bool
             <td>{money(trade.entry_fee + trade.exit_fee)}<span>virtual fees</span></td>
             <td>{exitLabel(trade.exit_reason)}<span>{trade.closed_at ? dateTime(trade.closed_at) : "--"}</span></td>
             <td>{duration(signalTime(trade), trade.closed_at)}<span title={trade.signal_recommendation ?? trade.reasons.join(" ")}>{extreme ? `${dateTime(signalTime(trade))} signal` : `Score ${trade.opportunity_score.toFixed(1)}`}</span></td>
+            <td><NoteCell trade={trade} onSave={onNoteSave} busy={false} /></td>
           </tr>
         ))}</tbody>
       </table>
+    </div>
+  );
+}
+
+function NoteCell({ trade, onSave, busy }: { trade: PaperTrade; onSave?: (tradeId: string, note: string) => void; busy: boolean }) {
+  const [draft, setDraft] = useState(trade.note);
+  useEffect(() => setDraft(trade.note), [trade.note]);
+  if (!onSave) return <span className="trade-note-readonly" title={trade.note}>{trade.note || "No note"}</span>;
+  return (
+    <div className="trade-note-editor">
+      <input
+        type="text"
+        maxLength={2000}
+        value={draft}
+        placeholder="Add note"
+        aria-label={`Note for ${trade.symbol} trade`}
+        disabled={busy}
+        onChange={(event) => setDraft(event.target.value)}
+      />
+      <button
+        className="icon-button compact-icon"
+        type="button"
+        title="Save trade note"
+        aria-label={`Save note for ${trade.symbol} trade`}
+        disabled={busy || draft === trade.note}
+        onClick={() => onSave(trade.id, draft)}
+      >
+        <Save size={13} />
+      </button>
     </div>
   );
 }

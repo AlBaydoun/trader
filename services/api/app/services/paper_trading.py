@@ -64,6 +64,7 @@ class PaperTrade:
     signal_price: float | None = None
     signal_level: str | None = None
     signal_recommendation: str | None = None
+    note: str = ""
 
 
 @dataclass
@@ -336,6 +337,102 @@ class PaperTradingService:
             )
             self._save()
             return self.positions()[-1]
+
+    def place_manual_order(
+        self,
+        *,
+        symbol: str,
+        direction: Direction,
+        volume: float,
+        entry: float,
+        stop_loss: float,
+        take_profit: float,
+        timeframe: str,
+        source_account_id: str = "",
+        note: str = "",
+    ) -> PaperPortfolio:
+        """Open an operator-controlled virtual trade with explicit protective levels."""
+        if direction == Direction.hold:
+            raise ValueError("Hold signals cannot be opened in the paper portfolio.")
+        if volume <= 0 or entry <= 0 or stop_loss <= 0 or take_profit <= 0:
+            raise ValueError("Volume, entry, stop-loss, and take-profit must be positive.")
+        if direction == Direction.buy and not (stop_loss < entry < take_profit):
+            raise ValueError(
+                "BUY trades require stop-loss below entry and take-profit above entry."
+            )
+        if direction == Direction.sell and not (take_profit < entry < stop_loss):
+            raise ValueError(
+                "SELL trades require take-profit below entry and stop-loss above entry."
+            )
+        with self._lock:
+            if len(self._open_trades()) >= self.max_open_positions:
+                raise ValueError(
+                    f"The virtual position limit of {self.max_open_positions} is already reached."
+                )
+            now = datetime.now(UTC)
+            risk_distance = abs(entry - stop_loss)
+            trade = PaperTrade(
+                id=f"paper-{uuid4().hex[:12]}",
+                symbol=symbol,
+                direction=direction,
+                timeframe=timeframe,
+                status="open",
+                quantity=round(volume, 8),
+                entry_price=round(entry, 8),
+                current_price=round(entry, 8),
+                stop_loss=round(stop_loss, 8),
+                take_profit=round(take_profit, 8),
+                risk_amount=round(risk_distance * volume, 2),
+                entry_fee=self._fee(entry, volume),
+                exit_fee=0.0,
+                gross_pnl=0.0,
+                net_pnl=0.0,
+                unrealized_pnl=0.0,
+                return_pct=0.0,
+                r_multiple=0.0,
+                confidence=0.0,
+                opportunity_score=0.0,
+                scan_rank=0,
+                reasons=["Manual paper trade opened by the operator."],
+                source="manual",
+                source_account_id=source_account_id,
+                opened_at=now,
+                updated_at=now,
+                note=note.strip(),
+            )
+            self.trades.append(trade)
+            self.source_account_id = source_account_id
+            self._decision(
+                cycle_id="manual",
+                action="opened",
+                outcome="accepted",
+                reason=(
+                    "Manual paper trade opened with operator-defined stop-loss and take-profit."
+                ),
+                symbol=trade.symbol,
+                trade=trade,
+            )
+            self._append_equity_point(now)
+            self._save()
+            return self.snapshot()
+
+    def update_trade_note(self, trade_id: str, note: str) -> PaperPortfolio:
+        with self._lock:
+            trade = next((item for item in self.trades if item.id == trade_id), None)
+            if trade is None:
+                raise KeyError(trade_id)
+            trade.note = note.strip()
+            trade.updated_at = datetime.now(UTC)
+            self._decision(
+                cycle_id="manual",
+                action="control",
+                outcome="note_updated",
+                reason="Operator note updated for the virtual trade.",
+                symbol=trade.symbol,
+                trade=trade,
+            )
+            self._save()
+            return self.snapshot()
 
     def process_cycle(
         self,

@@ -112,6 +112,7 @@ class PaperTradeDTO(APIModel):
     signal_price: float | None
     signal_level: str | None
     signal_recommendation: str | None
+    note: str
 
 
 class PaperDecisionDTO(APIModel):
@@ -257,6 +258,21 @@ class PaperControlRequestDTO(APIModel):
     timeframe_mode: Literal["auto", "manual"] | None = None
     minimum_opportunity_score: float | None = Field(default=None, ge=0, le=100)
     max_open_positions: int | None = Field(default=None, ge=1, le=200)
+
+
+class ManualPaperTradeRequestDTO(APIModel):
+    symbol: str = Field(min_length=1, max_length=40)
+    direction: Literal["buy", "sell"]
+    volume: float = Field(gt=0, le=1_000_000)
+    entry: float | None = Field(default=None, gt=0)
+    stop_loss: float = Field(gt=0)
+    take_profit: float = Field(gt=0)
+    timeframe: Literal["1m", "5m", "15m", "1h", "4h", "1d"] = "1m"
+    note: str = Field(default="", max_length=2000)
+
+
+class PaperTradeNoteRequestDTO(APIModel):
+    note: str = Field(default="", max_length=2000)
 
 
 class PaperResetRequestDTO(APIModel):

@@ -28,6 +28,7 @@ from app.schemas import (
     CandleDTO,
     ExtremeBacktestDTO,
     ExtremeScanDTO,
+    ManualPaperTradeRequestDTO,
     MarketScanDTO,
     MarketSymbolDTO,
     MT5ConnectionDTO,
@@ -38,6 +39,7 @@ from app.schemas import (
     PaperControlRequestDTO,
     PaperPortfolioDTO,
     PaperResetRequestDTO,
+    PaperTradeNoteRequestDTO,
     PositionDTO,
     RiskDecisionDTO,
     ScanDTO,
@@ -1007,6 +1009,36 @@ def cycle_paper_trading(force: bool = Query(default=False)) -> PaperPortfolioDTO
     return PaperPortfolioDTO.model_validate(run_paper_cycle(force))
 
 
+@app.post("/paper/manual/open", response_model=PaperPortfolioDTO)
+def open_manual_paper_trade(payload: ManualPaperTradeRequestDTO) -> PaperPortfolioDTO:
+    account = account_registry.active_account()
+    entry = payload.entry
+    if entry is None:
+        candles = market_candles(payload.symbol, payload.timeframe, 80)
+        if not candles:
+            raise HTTPException(
+                status_code=409,
+                detail="A current price is required before opening a manual virtual trade.",
+            )
+        entry = candles[-1].close
+    try:
+        return PaperPortfolioDTO.model_validate(
+            paper_trader.place_manual_order(
+                symbol=payload.symbol,
+                direction=Direction(payload.direction),
+                volume=payload.volume,
+                entry=entry,
+                stop_loss=payload.stop_loss,
+                take_profit=payload.take_profit,
+                timeframe=payload.timeframe,
+                source_account_id=account.id if account else "",
+                note=payload.note,
+            )
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
 @app.post("/paper/jdub/cycle", response_model=PaperPortfolioDTO)
 def cycle_jdub_paper_trading(force: bool = Query(default=True)) -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(run_jdub_cycle(force))
@@ -1123,6 +1155,19 @@ def close_paper_position(trade_id: str) -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(
         paper_trader.close_trade(trade_id, candles[-1].close)
     )
+
+
+@app.post("/paper/positions/{trade_id}/note", response_model=PaperPortfolioDTO)
+def update_paper_position_note(
+    trade_id: str,
+    payload: PaperTradeNoteRequestDTO,
+) -> PaperPortfolioDTO:
+    try:
+        return PaperPortfolioDTO.model_validate(
+            paper_trader.update_trade_note(trade_id, payload.note)
+        )
+    except KeyError as error:
+        raise HTTPException(status_code=404, detail="Virtual trade was not found.") from error
 
 
 @app.post("/paper/jdub/positions/{trade_id}/close", response_model=PaperPortfolioDTO)

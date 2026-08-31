@@ -42,6 +42,7 @@ import {
   closeCandlestickBuyPaperPosition,
   closeCandlestickSellPaperPosition,
   closeVideoStrategyPaperPosition,
+  openManualPaperTrade,
   resetExtremePaperPortfolio,
   resetJdubPaperPortfolio,
   resetRigorGatePaperPortfolio,
@@ -67,7 +68,8 @@ import {
   updateCandlestickPaperControl,
   updateCandlestickBuyPaperControl,
   updateCandlestickSellPaperControl,
-  updateVideoStrategyPaperControl
+  updateVideoStrategyPaperControl,
+  updatePaperTradeNote
 } from "./lib/api";
 import { playExtremeAlert, playSignalTone, speakExtremeAlert, speakSignal } from "./lib/alerts";
 import { DEFAULT_INDICATORS, INDICATOR_CATALOG, type ActiveIndicator } from "./lib/indicators";
@@ -82,6 +84,7 @@ import type {
   MT5Quote,
   NewsStatus,
   PaperControl,
+  ManualPaperTradeRequest,
   PaperPortfolio,
   ExtremeScan,
   StrategyLabSnapshot,
@@ -155,6 +158,7 @@ export function App() {
   const lastAlertRef = useRef<string>("");
 
   const activeSignal = signals[activeSymbol] ?? Object.values(signals)[0];
+  const activePrice = candles[activeSymbol]?.[candles[activeSymbol].length - 1]?.close ?? activeSignal?.entry;
 
   const refresh = useCallback(async () => {
     setScanning(true);
@@ -471,6 +475,30 @@ export function App() {
       setTradeMode(portfolio.engine.enabled ? "auto_trade" : "signal_only");
     } catch (error) {
       setPaperError(error instanceof Error ? error.message : "Virtual control update failed.");
+    } finally {
+      setPaperBusy(false);
+    }
+  }
+
+  async function openManualPaperTradeNow(request: ManualPaperTradeRequest) {
+    setPaperBusy(true);
+    setPaperError("");
+    try {
+      setPaperPortfolio(await openManualPaperTrade(request));
+    } catch (error) {
+      setPaperError(error instanceof Error ? error.message : "Manual virtual trade could not open.");
+    } finally {
+      setPaperBusy(false);
+    }
+  }
+
+  async function savePaperTradeNote(tradeId: string, note: string) {
+    setPaperBusy(true);
+    setPaperError("");
+    try {
+      setPaperPortfolio(await updatePaperTradeNote(tradeId, note));
+    } catch (error) {
+      setPaperError(error instanceof Error ? error.message : "Virtual trade note could not be saved.");
     } finally {
       setPaperBusy(false);
     }
@@ -1028,6 +1056,12 @@ export function App() {
         portfolio={paperPortfolio}
         busy={paperBusy}
         error={paperError}
+        manualSymbols={selectedSymbols}
+        manualSymbol={activeSymbol}
+        manualPrice={activePrice}
+        manualTimeframe={timeframe as PaperControl["timeframe"]}
+        onManualOpen={(request) => void openManualPaperTradeNow(request)}
+        onNoteSave={(tradeId, note) => void savePaperTradeNote(tradeId, note)}
         onControl={(control) => void controlPaper(control)}
         onRun={() => void runVirtualCycle()}
         onClose={(tradeId) => void closeVirtualPosition(tradeId)}

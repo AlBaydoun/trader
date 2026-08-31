@@ -9,6 +9,7 @@ import type {
   MarketSymbol,
   NewsFeed,
   ExtremeScan,
+  ManualPaperTradeRequest,
   PaperControl,
   PaperPortfolio,
   ScanResponse,
@@ -141,6 +142,17 @@ export function scanExtremeLevels(timeframe: string, force = false): Promise<Ext
 
 export function updatePaperControl(control: PaperControl): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>("/paper/control", control);
+}
+
+export function openManualPaperTrade(trade: ManualPaperTradeRequest): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>("/paper/manual/open", trade);
+}
+
+export function updatePaperTradeNote(tradeId: string, note: string): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>(
+    `/paper/positions/${encodeURIComponent(tradeId)}/note`,
+    { note }
+  );
 }
 
 export function updateJdubPaperControl(control: PaperControl): Promise<PaperPortfolio> {
