@@ -113,6 +113,8 @@ export function App() {
   const [extremeNotifications, setExtremeNotifications] = useState(loadExtremeNotificationPreferences);
   const [scanning, setScanning] = useState(false);
   const [backtest, setBacktest] = useState<Backtest | undefined>();
+  const [backtestBusy, setBacktestBusy] = useState(false);
+  const [backtestError, setBacktestError] = useState("");
   const [extremeBacktest, setExtremeBacktest] = useState<ExtremeBacktest | undefined>();
   const [extremeHistoryLimit, setExtremeHistoryLimit] = useState(2000);
   const [paperPortfolio, setPaperPortfolio] = useState<PaperPortfolio>();
@@ -364,19 +366,30 @@ export function App() {
     };
   }, [refreshExtreme]);
 
+  const runBacktest = useCallback(async () => {
+    if (!activeSymbol) return;
+    setBacktestBusy(true);
+    setBacktestError("");
+    try {
+      setBacktest(await getBacktest(activeSymbol, timeframe));
+    } catch (error) {
+      setBacktestError(error instanceof Error ? error.message : "Backtest could not be completed.");
+    } finally {
+      setBacktestBusy(false);
+    }
+  }, [activeSymbol, timeframe]);
+
   useEffect(() => {
     if (!activeSymbol) return;
-    const extremeHistory = timeframe === "1m"
-      ? getExtremeBacktest(activeSymbol, timeframe, extremeHistoryLimit).catch(() => undefined)
-      : Promise.resolve(undefined);
-    Promise.all([
-      getBacktest(activeSymbol, timeframe).catch(() => undefined),
-      extremeHistory
-    ]).then(([baseResult, extremeResult]) => {
-      setBacktest(baseResult);
-      setExtremeBacktest(extremeResult);
-    });
-  }, [activeSymbol, extremeHistoryLimit, timeframe]);
+    void runBacktest();
+    if (timeframe !== "1m") {
+      setExtremeBacktest(undefined);
+      return;
+    }
+    void getExtremeBacktest(activeSymbol, timeframe, extremeHistoryLimit)
+      .then(setExtremeBacktest)
+      .catch(() => setExtremeBacktest(undefined));
+  }, [activeSymbol, extremeHistoryLimit, runBacktest, timeframe]);
 
   const gridClass = useMemo(() => {
     if (selectedSymbols.length <= 1) return "charts-grid one";
@@ -920,6 +933,8 @@ export function App() {
         <SignalRail
           activeSignal={activeSignal}
           backtest={backtest}
+          backtestBusy={backtestBusy}
+          backtestError={backtestError}
           extremeBacktest={extremeBacktest}
           extremeHistoryLimit={extremeHistoryLimit}
           timeframe={timeframe}
@@ -937,6 +952,7 @@ export function App() {
           onTradeModeChange={(mode) => void controlPaper({ enabled: mode === "auto_trade" })}
           onSoundToggle={() => setSoundEnabled((enabled) => !enabled)}
           onVoiceToggle={() => setVoiceEnabled((enabled) => !enabled)}
+          onRunBacktest={() => void runBacktest()}
         />
       </div>
       <PaperTradingPanel

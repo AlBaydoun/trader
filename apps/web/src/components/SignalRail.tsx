@@ -1,4 +1,4 @@
-import { Bell, Landmark, ListTree, MessageSquareText, ShieldAlert, Volume2 } from "lucide-react";
+import { Bell, Landmark, ListTree, MessageSquareText, Play, RefreshCcw, ShieldAlert, Volume2 } from "lucide-react";
 import type {
   Backtest,
   ExtremeBacktest,
@@ -16,6 +16,8 @@ import { NewsAnalysisPanel } from "./NewsAnalysisPanel";
 interface SignalRailProps {
   activeSignal?: Signal;
   backtest?: Backtest;
+  backtestBusy: boolean;
+  backtestError: string;
   extremeBacktest?: ExtremeBacktest;
   extremeHistoryLimit: number;
   timeframe: string;
@@ -32,12 +34,15 @@ interface SignalRailProps {
   onTradeModeChange: (mode: TradeMode) => void;
   onSoundToggle: () => void;
   onVoiceToggle: () => void;
+  onRunBacktest: () => void;
   onExtremeHistoryLimitChange: (limit: number) => void;
 }
 
 export function SignalRail({
   activeSignal,
   backtest,
+  backtestBusy,
+  backtestError,
   extremeBacktest,
   extremeHistoryLimit,
   timeframe,
@@ -54,6 +59,7 @@ export function SignalRail({
   onTradeModeChange,
   onSoundToggle,
   onVoiceToggle,
+  onRunBacktest,
   onExtremeHistoryLimitChange
 }: SignalRailProps) {
   return (
@@ -240,8 +246,21 @@ export function SignalRail({
               {backtest.source === "mt5" ? "MT5 data" : "Demo data"}
             </span>
           )}
+          <button
+            className="icon-button compact-icon"
+            type="button"
+            title={`Run ${activeSymbol} ${timeframe} backtest`}
+            aria-label={`Run ${activeSymbol} ${timeframe} backtest`}
+            disabled={backtestBusy}
+            onClick={onRunBacktest}
+          >
+            {backtestBusy ? <RefreshCcw className="spin" size={14} /> : <Play size={14} />}
+          </button>
         </div>
-        {backtest ? (
+        <p className="backtest-window">{activeSymbol} {timeframe} · 500 historical candles · closed-bar entries</p>
+        {backtestError ? (
+          <p className="backtest-status error">{backtestError}</p>
+        ) : backtest ? (
           <div className="metrics-grid">
             <Metric label="Trades" value={backtest.trades.toString()} />
             <Metric label="Win rate" value={`${Math.round(backtest.win_rate * 100)}%`} />
