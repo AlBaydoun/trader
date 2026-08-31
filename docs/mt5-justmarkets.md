@@ -81,6 +81,39 @@ is written to `FILE_COMMON` as `TraderAI-mt5-paper-signals.csv` when a new confi
 The indicator is intentionally separate from `TraderCalendarBridge`; attach both to a chart when
 you want calendar export and chart signals at the same time.
 
+## Candlestick Pattern Recognition Indicator
+
+`integrations/mt5/TraderAI_CandlestickPatterns.mq5` is a signal-only chart indicator that marks
+confirmed, closed-candle patterns similar to the reference chart: Bullish/Bearish Engulfing,
+Morning/Evening Star, Three White Soldiers/Three Black Crows, and Doji. It scans the full loaded
+chart history, so you can scroll back and inspect where each pattern appeared. It contains no
+`OrderSend`, `CTrade`, or other order-placement calls.
+
+The indicator follows the timeframe of the chart by default because the candle patterns are
+calculated from that chart's OHLC data. Attach it to an M15 chart to review 15-minute patterns,
+or switch the chart to M1, M5, H1, or another timeframe to recalculate the same rules at that
+scale. Pattern labels and arrows can be turned on or off in the Inputs tab. Alerts are disabled by
+default; when enabled, alerts describe the pattern, symbol, timeframe, and close time of the last
+completed candle. Sound, push, and email delivery still depend on the corresponding MT5 terminal
+notifications settings.
+
+In the active JustMarkets terminal, the source and compiled indicator are installed under:
+
+```text
+MQL5/Indicators/TraderAI/TraderAI_CandlestickPatterns.mq5
+MQL5/Indicators/TraderAI/TraderAI_CandlestickPatterns.ex5
+```
+
+To attach it later: open `Navigator -> Indicators -> TraderAI`, refresh if needed, and drag
+**TraderAI Candlestick Patterns** onto the desired chart. If you install it on another MT5
+profile, use `File -> Open Data Folder` for that exact terminal, copy the source file into the same
+`MQL5/Indicators/TraderAI` folder, open it in MetaEditor, press `F7`, then refresh Navigator.
+
+The indicator does not decide that a pattern guarantees a BUY or SELL. A bullish pattern is a
+potential bullish setup and a bearish pattern is a potential bearish setup; use the paper-trading
+bot, risk engine, spread checks, and historical testing to evaluate a rule before considering any
+live execution. No live trading is enabled by installing this indicator.
+
 ## Multi-timeframe Trend Indicator
 
 `integrations/mt5/TraderAI_MultiTimeframeTrend.mq5` is a second, reusable chart indicator for

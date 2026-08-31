@@ -13,5 +13,6 @@ build/
 coverage/
 .DS_Store
 *.log
+*.ex5
 data/
 tmp/
