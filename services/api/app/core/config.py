@@ -39,6 +39,7 @@ class Settings(BaseSettings):
 
     rigorgate_paper_auto_enabled: bool = True
     rigorgate_paper_state_file: str = "../../data/rigorgate-paper.json"
+    rigorgate_paper_timeframe: str = Field(default="15m", pattern="^(1m|5m|15m|1h|4h|1d)$")
     rigorgate_paper_starting_balance: float = Field(default=10000.0, gt=0)
     rigorgate_paper_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
     rigorgate_paper_max_open_positions: int = Field(default=3, ge=1, le=200)

@@ -46,7 +46,7 @@ export function PaperTradingPanel({
   const main = variant === "market";
   const engine = portfolio?.engine;
   const metrics = portfolio?.metrics;
-  const panelId = extreme ? "extreme-paper-trading" : jdub ? "jdub-trading" : "paper-trading";
+  const panelId = extreme ? "extreme-paper-trading" : jdub ? "jdub-trading" : rigorgate ? "rigorgate-trading" : "paper-trading";
 
   return (
     <section className="paper-workspace" id={panelId} aria-label={extreme ? "Extreme virtual trading" : jdub ? "Jdub Traders virtual trading" : rigorgate ? "RigorGate virtual trading" : "Virtual paper trading"}>

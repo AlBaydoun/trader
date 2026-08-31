@@ -120,6 +120,7 @@ rigorgate_trader = RigorGateService(
     PaperTradingService(
         settings.rigorgate_paper_state_file,
         enabled=settings.rigorgate_paper_auto_enabled,
+        timeframe=settings.rigorgate_paper_timeframe,
         starting_balance=settings.rigorgate_paper_starting_balance,
         risk_per_trade_pct=settings.rigorgate_paper_risk_per_trade_pct,
         max_open_positions=settings.rigorgate_paper_max_open_positions,

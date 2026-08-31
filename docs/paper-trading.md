@@ -42,6 +42,8 @@ semantics and independent score, cost, risk, time-limit, persistence, and learni
 an adapter for virtual testing, not a claim that the linked demo predicts or guarantees profit.
 Its results are stored separately at `RIGORGATE_PAPER_STATE_FILE`. The panel supports the same
 open, history, daily, learning, and decision-log views as the other paper ledgers.
+RigorGate defaults to 15m on a fresh ledger, and its Timeframe control also supports 1m, 5m, 1h,
+4h, and 1d. Changing it in the panel persists the choice across API restarts.
 
 ## Extreme Virtual Trading
 
