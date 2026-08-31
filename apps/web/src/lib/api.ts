@@ -125,6 +125,10 @@ export function getCandlestickSellPaperPortfolio(): Promise<PaperPortfolio> {
   return getJson<PaperPortfolio>("/paper/candlestick/sell/portfolio");
 }
 
+export function getVideoStrategyPaperPortfolio(): Promise<PaperPortfolio> {
+  return getJson<PaperPortfolio>("/paper/video-ma-macd/portfolio");
+}
+
 export function getStrategyLab(): Promise<StrategyLabSnapshot> {
   return getJson<StrategyLabSnapshot>("/paper/strategies");
 }
@@ -163,6 +167,10 @@ export function updateCandlestickSellPaperControl(control: PaperControl): Promis
   return sendJson<PaperPortfolio>("/paper/candlestick/sell/control", control);
 }
 
+export function updateVideoStrategyPaperControl(control: PaperControl): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>("/paper/video-ma-macd/control", control);
+}
+
 export function runPaperCycle(force = true): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>(`/paper/cycle?force=${force ? "true" : "false"}`);
 }
@@ -189,6 +197,10 @@ export function runCandlestickBuyPaperCycle(force = true): Promise<PaperPortfoli
 
 export function runCandlestickSellPaperCycle(force = true): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>(`/paper/candlestick/sell/cycle?force=${force ? "true" : "false"}`);
+}
+
+export function runVideoStrategyPaperCycle(force = true): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>(`/paper/video-ma-macd/cycle?force=${force ? "true" : "false"}`);
 }
 
 export function runStrategyLabCycle(force = true): Promise<StrategyLabSnapshot> {
@@ -233,6 +245,10 @@ export function closeCandlestickSellPaperPosition(tradeId: string): Promise<Pape
   return sendJson<PaperPortfolio>(`/paper/candlestick/sell/positions/${encodeURIComponent(tradeId)}/close`);
 }
 
+export function closeVideoStrategyPaperPosition(tradeId: string): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>(`/paper/video-ma-macd/positions/${encodeURIComponent(tradeId)}/close`);
+}
+
 export function resetPaperPortfolio(): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>("/paper/reset", { confirmation: "RESET PAPER ACCOUNT" });
 }
@@ -259,6 +275,10 @@ export function resetCandlestickBuyPaperPortfolio(): Promise<PaperPortfolio> {
 
 export function resetCandlestickSellPaperPortfolio(): Promise<PaperPortfolio> {
   return sendJson<PaperPortfolio>("/paper/candlestick/sell/reset", { confirmation: "RESET PAPER ACCOUNT" });
+}
+
+export function resetVideoStrategyPaperPortfolio(): Promise<PaperPortfolio> {
+  return sendJson<PaperPortfolio>("/paper/video-ma-macd/reset", { confirmation: "RESET PAPER ACCOUNT" });
 }
 
 export function getBacktest(symbol: string, timeframe: string): Promise<Backtest> {

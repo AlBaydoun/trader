@@ -25,6 +25,7 @@ import {
   getCandlestickPaperPortfolio,
   getCandlestickBuyPaperPortfolio,
   getCandlestickSellPaperPortfolio,
+  getVideoStrategyPaperPortfolio,
   getStrategyLab,
   getPaperPortfolio,
   scanExtremeLevels,
@@ -40,6 +41,7 @@ import {
   closeCandlestickPaperPosition,
   closeCandlestickBuyPaperPosition,
   closeCandlestickSellPaperPosition,
+  closeVideoStrategyPaperPosition,
   resetExtremePaperPortfolio,
   resetJdubPaperPortfolio,
   resetRigorGatePaperPortfolio,
@@ -47,12 +49,14 @@ import {
   resetCandlestickPaperPortfolio,
   resetCandlestickBuyPaperPortfolio,
   resetCandlestickSellPaperPortfolio,
+  resetVideoStrategyPaperPortfolio,
   runJdubPaperCycle,
   runRigorGatePaperCycle,
   runExtremePaperCycle,
   runCandlestickPaperCycle,
   runCandlestickBuyPaperCycle,
   runCandlestickSellPaperCycle,
+  runVideoStrategyPaperCycle,
   runStrategyLabCycle,
   runPaperCycle,
   updateExtremePaperControl,
@@ -62,7 +66,8 @@ import {
   updatePaperControl,
   updateCandlestickPaperControl,
   updateCandlestickBuyPaperControl,
-  updateCandlestickSellPaperControl
+  updateCandlestickSellPaperControl,
+  updateVideoStrategyPaperControl
 } from "./lib/api";
 import { playExtremeAlert, playSignalTone, speakExtremeAlert, speakSignal } from "./lib/alerts";
 import { DEFAULT_INDICATORS, INDICATOR_CATALOG, type ActiveIndicator } from "./lib/indicators";
@@ -138,6 +143,9 @@ export function App() {
   const [candlestickSellPortfolio, setCandlestickSellPortfolio] = useState<PaperPortfolio>();
   const [candlestickSellBusy, setCandlestickSellBusy] = useState(false);
   const [candlestickSellError, setCandlestickSellError] = useState("");
+  const [videoStrategyPortfolio, setVideoStrategyPortfolio] = useState<PaperPortfolio>();
+  const [videoStrategyBusy, setVideoStrategyBusy] = useState(false);
+  const [videoStrategyError, setVideoStrategyError] = useState("");
   const [strategyLab, setStrategyLab] = useState<StrategyLabSnapshot>();
   const [strategyLabBusy, setStrategyLabBusy] = useState(false);
   const [strategyLabError, setStrategyLabError] = useState("");
@@ -251,6 +259,17 @@ export function App() {
     const interval = window.setInterval(() => void refreshCandlestickBots(), 10000);
     return () => window.clearInterval(interval);
   }, [refreshCandlestickBots]);
+
+  const refreshVideoStrategy = useCallback(async () => {
+    const portfolio = await getVideoStrategyPaperPortfolio().catch(() => null);
+    if (portfolio) setVideoStrategyPortfolio(portfolio);
+  }, []);
+
+  useEffect(() => {
+    void refreshVideoStrategy();
+    const interval = window.setInterval(() => void refreshVideoStrategy(), 10000);
+    return () => window.clearInterval(interval);
+  }, [refreshVideoStrategy]);
 
   const refreshStrategyLab = useCallback(async () => {
     const snapshot = await getStrategyLab().catch(() => null);
@@ -760,6 +779,55 @@ export function App() {
     }
   }
 
+  async function controlVideoStrategy(control: PaperControl) {
+    setVideoStrategyBusy(true);
+    setVideoStrategyError("");
+    try {
+      setVideoStrategyPortfolio(await updateVideoStrategyPaperControl(control));
+    } catch (error) {
+      setVideoStrategyError(error instanceof Error ? error.message : "Video strategy control update failed.");
+    } finally {
+      setVideoStrategyBusy(false);
+    }
+  }
+
+  async function runVideoStrategyCycle() {
+    setVideoStrategyBusy(true);
+    setVideoStrategyError("");
+    try {
+      setVideoStrategyPortfolio(await runVideoStrategyPaperCycle(true));
+    } catch (error) {
+      setVideoStrategyError(error instanceof Error ? error.message : "Video strategy cycle failed.");
+    } finally {
+      setVideoStrategyBusy(false);
+    }
+  }
+
+  async function closeVideoStrategyPosition(tradeId: string) {
+    setVideoStrategyBusy(true);
+    setVideoStrategyError("");
+    try {
+      setVideoStrategyPortfolio(await closeVideoStrategyPaperPosition(tradeId));
+    } catch (error) {
+      setVideoStrategyError(error instanceof Error ? error.message : "Video strategy position could not close.");
+    } finally {
+      setVideoStrategyBusy(false);
+    }
+  }
+
+  async function resetVideoStrategyPortfolio() {
+    if (!window.confirm("Reset all Video MA + MTF MACD virtual trades, history, and results?")) return;
+    setVideoStrategyBusy(true);
+    setVideoStrategyError("");
+    try {
+      setVideoStrategyPortfolio(await resetVideoStrategyPaperPortfolio());
+    } catch (error) {
+      setVideoStrategyError(error instanceof Error ? error.message : "Video strategy reset failed.");
+    } finally {
+      setVideoStrategyBusy(false);
+    }
+  }
+
   async function runExtremeVirtualCycle() {
     setExtremePaperBusy(true);
     setExtremePaperError("");
@@ -905,6 +973,7 @@ export function App() {
         candlestick={candlestickPaperPortfolio}
         candlestickBuy={candlestickBuyPortfolio}
         candlestickSell={candlestickSellPortfolio}
+        videoStrategy={videoStrategyPortfolio}
         strategyLab={strategyLab}
         onOpenPanel={scrollToPanel}
       />
@@ -1007,6 +1076,17 @@ export function App() {
         onRun={() => void runCandlestickSellCycle()}
         onClose={(tradeId) => void closeCandlestickSellPosition(tradeId)}
         onReset={() => void resetCandlestickSellPortfolio()}
+        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+      />
+      <PaperTradingPanel
+        variant="video-strategy"
+        portfolio={videoStrategyPortfolio}
+        busy={videoStrategyBusy}
+        error={videoStrategyError}
+        onControl={(control) => void controlVideoStrategy(control)}
+        onRun={() => void runVideoStrategyCycle()}
+        onClose={(tradeId) => void closeVideoStrategyPosition(tradeId)}
+        onReset={() => void resetVideoStrategyPortfolio()}
         onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
       />
       <PaperTradingPanel

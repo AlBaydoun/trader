@@ -1,0 +1,123 @@
+from datetime import UTC, datetime, timedelta
+
+from app.domain.models import Candle, Direction
+from app.services.mt5_bridge import MT5MarketSymbol
+from app.services.paper_trading import PaperTradingService
+from app.services.video_ma_mtf_macd import VideoMAMTFMACDBotService, _aggregate_candles
+
+
+def history(direction: Direction | None = None) -> list[Candle]:
+    closes = [100.0] * 220
+    if direction == Direction.buy:
+        closes.extend(100.0 + index * 0.15 for index in range(30))
+        closes.extend([104.0, 103.0, 105.0])
+    elif direction == Direction.sell:
+        closes.extend(100.0 - index * 0.15 for index in range(30))
+        closes.extend([96.0, 97.0, 95.0])
+    else:
+        closes.extend([100.0, 100.05, 100.0])
+    candles: list[Candle] = []
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    for index, close in enumerate(closes):
+        opening = closes[index - 1] if index else close
+        candles.append(
+            Candle(
+                symbol="TEST",
+                timeframe="5m",
+                ts=start + timedelta(minutes=index * 5),
+                open=opening,
+                high=max(opening, close) + 0.2,
+                low=min(opening, close) - 0.2,
+                close=close,
+                volume=100.0,
+                source="mt5",
+            )
+        )
+    return candles
+
+
+def metadata(price: float = 100.0) -> MT5MarketSymbol:
+    return MT5MarketSymbol(
+        symbol="TEST",
+        description="Test symbol",
+        category="Test",
+        currency_base="USD",
+        currency_profit="USD",
+        digits=2,
+        point=0.01,
+        bid=price,
+        ask=price + 0.01,
+        spread_points=1.0,
+        visible=True,
+        trade_mode=1,
+        last_tick_at=datetime.now(UTC),
+    )
+
+
+def bot(tmp_path) -> VideoMAMTFMACDBotService:
+    ledger = PaperTradingService(
+        tmp_path / "video-paper.json",
+        enabled=True,
+        timeframe="5m",
+        starting_balance=10000.0,
+        risk_per_trade_pct=0.05,
+        max_open_positions=5,
+        minimum_opportunity_score=68.0,
+        commission_bps=1.0,
+        slippage_bps=1.0,
+        cycle_interval_seconds=60,
+        max_position_minutes=60,
+    )
+    return VideoMAMTFMACDBotService(ledger, object())
+
+
+def test_aggregates_m5_candles_into_m15() -> None:
+    aggregated = _aggregate_candles(history(Direction.buy), "15m")
+
+    assert len(aggregated) == 85
+    assert aggregated[-1].timeframe == "15m"
+    assert aggregated[-1].close == 105.0
+
+
+def test_video_strategy_creates_bullish_setup(tmp_path) -> None:
+    setup = bot(tmp_path)._opportunity(
+        "TEST",
+        history(Direction.buy),
+        metadata(105.0),
+        "5m",
+        datetime.now(UTC),
+    )
+
+    assert setup is not None
+    assert setup.direction == Direction.buy
+    assert setup.recommendation == "BUY"
+    assert setup.take_profit > setup.entry > setup.stop_loss
+    assert any("EMA(200)" in reason.message for reason in setup.reasons)
+    assert any(reason.category == "macd" for reason in setup.reasons)
+
+
+def test_video_strategy_creates_bearish_setup(tmp_path) -> None:
+    setup = bot(tmp_path)._opportunity(
+        "TEST",
+        history(Direction.sell),
+        metadata(95.0),
+        "5m",
+        datetime.now(UTC),
+    )
+
+    assert setup is not None
+    assert setup.direction == Direction.sell
+    assert setup.recommendation == "SELL"
+    assert setup.stop_loss > setup.entry > setup.take_profit
+
+
+def test_video_strategy_rejects_unconfirmed_market(tmp_path) -> None:
+    setup = bot(tmp_path)._opportunity(
+        "TEST",
+        history(),
+        metadata(),
+        "5m",
+        datetime.now(UTC),
+    )
+
+    assert setup is None

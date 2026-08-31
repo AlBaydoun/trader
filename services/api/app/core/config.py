@@ -106,6 +106,18 @@ class Settings(BaseSettings):
     candlestick_sell_paper_cycle_interval_seconds: int = Field(default=60, ge=15, le=3600)
     candlestick_sell_paper_max_position_minutes: int = Field(default=240, ge=1, le=43200)
 
+    video_strategy_paper_auto_enabled: bool = True
+    video_strategy_paper_state_file: str = "../../data/video-ma-mtf-macd-paper.json"
+    video_strategy_paper_timeframe_mode: str = Field(default="manual", pattern="^(auto|manual)$")
+    video_strategy_paper_timeframe: str = Field(default="5m", pattern="^(1m|5m|15m|1h|4h|1d)$")
+    video_strategy_paper_timeframes: str = "1m,5m,15m,1h,4h,1d"
+    video_strategy_paper_starting_balance: float = Field(default=10000.0, gt=0)
+    video_strategy_paper_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
+    video_strategy_paper_max_open_positions: int = Field(default=5, ge=1, le=200)
+    video_strategy_paper_min_opportunity_score: float = Field(default=68.0, ge=0.0, le=100.0)
+    video_strategy_paper_cycle_interval_seconds: int = Field(default=60, ge=15, le=3600)
+    video_strategy_paper_max_position_minutes: int = Field(default=60, ge=1, le=43200)
+
     strategy_lab_enabled: bool = True
     strategy_lab_state_dir: str = "../../data/strategy-lab"
     strategy_lab_starting_balance: float = Field(default=10000.0, gt=0)

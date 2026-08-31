@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Target,
   CandlestickChart,
+  GitBranch,
   TrendingDown,
   TrendingUp
 } from "lucide-react";
@@ -24,6 +25,7 @@ interface VirtualTradersDashboardProps {
   candlestick?: PaperPortfolio;
   candlestickBuy?: PaperPortfolio;
   candlestickSell?: PaperPortfolio;
+  videoStrategy?: PaperPortfolio;
   strategyLab?: StrategyLabSnapshot;
   onOpenPanel: (panelId: string) => void;
 }
@@ -31,7 +33,7 @@ interface VirtualTradersDashboardProps {
 interface TraderCardProps {
   name: string;
   subtitle: string;
-  accent: "market" | "jdub" | "rigorgate" | "extreme" | "candlestick" | "candlestick-buy" | "candlestick-sell";
+  accent: "market" | "jdub" | "rigorgate" | "extreme" | "candlestick" | "candlestick-buy" | "candlestick-sell" | "video-strategy";
   icon: ReactNode;
   panelId: string;
   portfolio?: PaperPortfolio;
@@ -46,10 +48,11 @@ export function VirtualTradersDashboard({
   candlestick,
   candlestickBuy,
   candlestickSell,
+  videoStrategy,
   strategyLab,
   onOpenPanel
 }: VirtualTradersDashboardProps) {
-  const portfolios = [paper, jdub, rigorgate, extreme, candlestick, candlestickBuy, candlestickSell].filter(
+  const portfolios = [paper, jdub, rigorgate, extreme, candlestick, candlestickBuy, candlestickSell, videoStrategy].filter(
     (portfolio): portfolio is PaperPortfolio => Boolean(portfolio)
   );
   const totalEquity = portfolios.length
@@ -178,6 +181,15 @@ export function VirtualTradersDashboard({
           icon={<TrendingDown size={17} />}
           panelId="candlestick-sell-trading"
           portfolio={candlestickSell}
+          onOpenPanel={onOpenPanel}
+        />
+        <TraderCard
+          name="Video MA + MTF MACD Bot"
+          subtitle="Video-derived EMA 200, EMA 9/36, and higher-timeframe MACD"
+          accent="video-strategy"
+          icon={<GitBranch size={17} />}
+          panelId="video-strategy-trading"
+          portfolio={videoStrategy}
           onOpenPanel={onOpenPanel}
         />
         <StrategyLabCard snapshot={strategyLab} onOpenPanel={onOpenPanel} />

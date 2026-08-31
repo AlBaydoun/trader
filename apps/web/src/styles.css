@@ -2185,6 +2185,10 @@ button:disabled {
   border-top-color: #ff8ea0;
 }
 
+.dashboard-trader-card.video-strategy {
+  border-top-color: #d8a6ff;
+}
+
 .dashboard-trader-card.lab {
   border-top-color: #a9c5ff;
 }
@@ -2233,6 +2237,10 @@ button:disabled {
 
 .dashboard-trader-card.candlestick-sell .dashboard-card-icon {
   color: #ff8ea0;
+}
+
+.dashboard-trader-card.video-strategy .dashboard-card-icon {
+  color: #d8a6ff;
 }
 
 .dashboard-trader-card.lab .dashboard-card-icon {

@@ -64,6 +64,7 @@ from app.services.scanner import ScannerService
 from app.services.strategy import SignalEngine
 from app.services.strategy_lab import STRATEGY_PROFILES, ScalpStrategyLabService, StrategyLabMember
 from app.services.timeframe_selector import choose_best_scan
+from app.services.video_ma_mtf_macd import VideoMAMTFMACDBotService
 
 PAPER_TIMEFRAME_OPTIONS = ("1m", "5m", "15m", "1h", "4h", "1d")
 settings = get_settings()
@@ -269,6 +270,33 @@ candlestick_sell_trader = CandlestickPatternBotService(
     pattern_id="bearish-engulfing",
     bot_name="Bearish Engulfing SELL Bot",
 )
+video_strategy_trader = VideoMAMTFMACDBotService(
+    PaperTradingService(
+        settings.video_strategy_paper_state_file,
+        enabled=settings.video_strategy_paper_auto_enabled,
+        timeframe_mode=(
+            "auto" if settings.video_strategy_paper_timeframe_mode == "auto" else "manual"
+        ),
+        timeframe=settings.video_strategy_paper_timeframe,
+        starting_balance=settings.video_strategy_paper_starting_balance,
+        risk_per_trade_pct=settings.video_strategy_paper_risk_per_trade_pct,
+        max_open_positions=settings.video_strategy_paper_max_open_positions,
+        minimum_opportunity_score=settings.video_strategy_paper_min_opportunity_score,
+        commission_bps=settings.paper_commission_bps,
+        slippage_bps=settings.paper_slippage_bps,
+        cycle_interval_seconds=settings.video_strategy_paper_cycle_interval_seconds,
+        max_position_minutes=settings.video_strategy_paper_max_position_minutes,
+        adaptive_learning_enabled=settings.paper_adaptive_learning_enabled,
+        learning_min_samples=settings.paper_learning_min_samples,
+        trade_source="video-ma-mtf-macd-virtual",
+    ),
+    mt5_bridge,
+    timeframe_options=tuple(
+        item.strip()
+        for item in settings.video_strategy_paper_timeframes.split(",")
+        if item.strip() in PAPER_TIMEFRAME_OPTIONS
+    ) or PAPER_TIMEFRAME_OPTIONS,
+)
 strategy_lab = ScalpStrategyLabService(
     [
         StrategyLabMember(
@@ -438,6 +466,17 @@ def run_rigorgate_cycle(force: bool = False) -> PaperPortfolio:
         )
 
 
+def run_video_strategy_cycle(force: bool = False) -> PaperPortfolio:
+    with paper_cycle_lock:
+        account = account_registry.active_account()
+        return video_strategy_trader.process_cycle(
+            account,
+            settings.market_scan_max_symbols,
+            settings.market_scan_max_symbols,
+            force=force,
+        )
+
+
 def scan_extreme_timeframes(
     account: BrokerAccountProfile | None,
     force: bool,
@@ -531,7 +570,7 @@ async def jdub_trading_loop() -> None:
 
 
 async def candlestick_trading_loop(
-    trader: CandlestickPatternBotService,
+    trader: CandlestickPatternBotService | VideoMAMTFMACDBotService,
     label: str,
     initial_delay: int,
 ) -> None:
@@ -596,6 +635,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     candlestick_sell_task = asyncio.create_task(
         candlestick_trading_loop(candlestick_sell_trader, "Bearish Engulfing SELL Bot", 36)
     )
+    video_strategy_task = asyncio.create_task(
+        candlestick_trading_loop(video_strategy_trader, "Video MA + MTF MACD Bot", 42)
+    )
     rigorgate_task = asyncio.create_task(rigorgate_trading_loop())
     extreme_task = asyncio.create_task(extreme_scanning_loop())
     try:
@@ -606,6 +648,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         candlestick_main_task.cancel()
         candlestick_buy_task.cancel()
         candlestick_sell_task.cancel()
+        video_strategy_task.cancel()
         rigorgate_task.cancel()
         extreme_task.cancel()
         with suppress(asyncio.CancelledError):
@@ -618,6 +661,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             await candlestick_buy_task
         with suppress(asyncio.CancelledError):
             await candlestick_sell_task
+        with suppress(asyncio.CancelledError):
+            await video_strategy_task
         with suppress(asyncio.CancelledError):
             await rigorgate_task
         with suppress(asyncio.CancelledError):
@@ -851,6 +896,11 @@ def candlestick_sell_paper_portfolio() -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(candlestick_sell_trader.snapshot())
 
 
+@app.get("/paper/video-ma-macd/portfolio", response_model=PaperPortfolioDTO)
+def video_strategy_paper_portfolio() -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(video_strategy_trader.snapshot())
+
+
 @app.get("/paper/strategies", response_model=StrategyLabDTO)
 def paper_strategy_lab() -> StrategyLabDTO:
     return StrategyLabDTO.model_validate(strategy_lab.snapshot())
@@ -940,6 +990,18 @@ def control_candlestick_sell_paper_trading(payload: PaperControlRequestDTO) -> P
     return PaperPortfolioDTO.model_validate(portfolio)
 
 
+@app.post("/paper/video-ma-macd/control", response_model=PaperPortfolioDTO)
+def control_video_strategy_paper_trading(payload: PaperControlRequestDTO) -> PaperPortfolioDTO:
+    portfolio = video_strategy_trader.update_control(
+        enabled=payload.enabled,
+        timeframe=payload.timeframe,
+        timeframe_mode=payload.timeframe_mode,
+        minimum_opportunity_score=payload.minimum_opportunity_score,
+        max_open_positions=payload.max_open_positions,
+    )
+    return PaperPortfolioDTO.model_validate(portfolio)
+
+
 @app.post("/paper/cycle", response_model=PaperPortfolioDTO)
 def cycle_paper_trading(force: bool = Query(default=False)) -> PaperPortfolioDTO:
     return PaperPortfolioDTO.model_validate(run_paper_cycle(force))
@@ -994,6 +1056,11 @@ def cycle_candlestick_sell_paper_trading(force: bool = Query(default=True)) -> P
             force=force,
         )
     )
+
+
+@app.post("/paper/video-ma-macd/cycle", response_model=PaperPortfolioDTO)
+def cycle_video_strategy_paper_trading(force: bool = Query(default=True)) -> PaperPortfolioDTO:
+    return PaperPortfolioDTO.model_validate(run_video_strategy_cycle(force))
 
 
 @app.post("/paper/strategies/cycle", response_model=StrategyLabDTO)
@@ -1207,6 +1274,38 @@ def close_candlestick_sell_paper_position(trade_id: str) -> PaperPortfolioDTO:
     )
 
 
+@app.post("/paper/video-ma-macd/positions/{trade_id}/close", response_model=PaperPortfolioDTO)
+def close_video_strategy_paper_position(trade_id: str) -> PaperPortfolioDTO:
+    position = next(
+        (item for item in video_strategy_trader.positions() if item.id == trade_id),
+        None,
+    )
+    if position is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Open video MA + MTF MACD virtual position not found.",
+        )
+    trade = next(
+        (item for item in video_strategy_trader.snapshot().open_positions if item.id == trade_id),
+        None,
+    )
+    timeframe = trade.timeframe if trade is not None else video_strategy_trader.timeframe
+    candles = mt5_bridge.candles(
+        account_registry.active_account(),
+        position.symbol,
+        timeframe,
+        80,
+    )
+    if not candles:
+        raise HTTPException(
+            status_code=409,
+            detail="A verified current MT5 price is required to close the video strategy position.",
+        )
+    return PaperPortfolioDTO.model_validate(
+        video_strategy_trader.close_trade(trade_id, candles[-1].close)
+    )
+
+
 @app.post("/paper/reset", response_model=PaperPortfolioDTO)
 def reset_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
     if payload.confirmation != "RESET PAPER ACCOUNT":
@@ -1254,6 +1353,13 @@ def reset_candlestick_sell_paper_trading(payload: PaperResetRequestDTO) -> Paper
     if payload.confirmation != "RESET PAPER ACCOUNT":
         raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
     return PaperPortfolioDTO.model_validate(candlestick_sell_trader.reset())
+
+
+@app.post("/paper/video-ma-macd/reset", response_model=PaperPortfolioDTO)
+def reset_video_strategy_paper_trading(payload: PaperResetRequestDTO) -> PaperPortfolioDTO:
+    if payload.confirmation != "RESET PAPER ACCOUNT":
+        raise HTTPException(status_code=422, detail="Paper reset confirmation did not match.")
+    return PaperPortfolioDTO.model_validate(video_strategy_trader.reset())
 
 
 @app.get("/candles/{symbol}", response_model=list[CandleDTO])

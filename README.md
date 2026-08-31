@@ -20,6 +20,10 @@ This project is **not** a profit guarantee and does not ship with live trading e
   fill, live virtual P/L, exit result, and learning.
 - Separate persistent Candlestick Pattern Bot ledger, defaulting to M15 and recognizing bullish/
   bearish engulfing, morning/evening star, three white soldiers/three black crows, and Doji.
+- Video-derived MA + MTF MACD paper bot and MT5 signal indicator, defaulting to the demonstrated
+  M5 chart with EMA(200), EMA(9/36), higher-timeframe MACD confirmation, swing/ATR stop, and 2R
+  target. The implementation is configurable because the video does not expose a complete
+  proprietary rule set.
 - Automatic timeframe selection across the paper bots compares configured timeframes and records
   the selected timeframe on every virtual trade; Manual mode can force a timeframe. Jdub Traders
   preserves its exact M1 opening-range/M5 confirmation behavior on M1 and uses an explicit
@@ -134,6 +138,7 @@ BROKER_ADAPTER=paper
 - [85/15 Extreme Scanner](docs/extreme-scanner.md)
 - [Research Strategy Tester EA](docs/research-trend-strategy.md)
 - [Chart Indicators and AI Reading](docs/chart-indicators.md)
+- [Video MA + MTF MACD Strategy](docs/video-ma-mtf-macd.md)
 - [Operations Runbook](docs/operations.md)
 
 ## Repository Layout
