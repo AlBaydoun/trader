@@ -1,11 +1,13 @@
-import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, GripVertical } from "lucide-react";
 import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 
 const ORDER_STORAGE_KEY = "trader:paper-bot-order-v2";
+const COLLAPSED_STORAGE_KEY = "trader:paper-bot-collapsed-v1";
 
 export interface PaperBotDockItem {
   id: string;
   label: string;
+  collapsible?: boolean;
   node: ReactNode;
 }
 
@@ -17,15 +19,22 @@ export function PaperBotDock({ bots }: PaperBotDockProps) {
   const botIds = bots.map((bot) => bot.id);
   const botIdsKey = botIds.join("|");
   const [order, setOrder] = useState<string[]>(() => loadOrder(botIds));
+  const [collapsedIds, setCollapsedIds] = useState<string[]>(loadCollapsed);
   const [draggingId, setDraggingId] = useState<string>();
 
   useEffect(() => {
-    setOrder((current) => reconcileOrder(current, botIdsKey ? botIdsKey.split("|") : []));
+    const availableIds = botIdsKey ? botIdsKey.split("|") : [];
+    setOrder((current) => reconcileOrder(current, availableIds));
+    setCollapsedIds((current) => current.filter((id) => availableIds.includes(id)));
   }, [botIdsKey]);
 
   useEffect(() => {
     window.localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(order));
   }, [order]);
+
+  useEffect(() => {
+    window.localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify(collapsedIds));
+  }, [collapsedIds]);
 
   const orderedBots = order
     .map((id) => bots.find((bot) => bot.id === id))
@@ -94,6 +103,18 @@ export function PaperBotDock({ bots }: PaperBotDockProps) {
               <strong>{bot.label}</strong>
             </span>
             <span className="paper-bot-order-actions">
+              {bot.collapsible && (
+                <button
+                  className="icon-button compact-icon paper-bot-collapse-button"
+                  type="button"
+                  title={collapsedIds.includes(bot.id) ? "Expand bot" : "Fold bot"}
+                  aria-label={collapsedIds.includes(bot.id) ? `Expand ${bot.label}` : `Fold ${bot.label}`}
+                  aria-expanded={!collapsedIds.includes(bot.id)}
+                  onClick={() => setCollapsedIds((current) => current.includes(bot.id) ? current.filter((id) => id !== bot.id) : [...current, bot.id])}
+                >
+                  {collapsedIds.includes(bot.id) ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                </button>
+              )}
               <button
                 className="icon-button compact-icon"
                 type="button"
@@ -116,7 +137,7 @@ export function PaperBotDock({ bots }: PaperBotDockProps) {
               </button>
             </span>
           </div>
-          {bot.node}
+          {(!bot.collapsible || !collapsedIds.includes(bot.id)) && bot.node}
         </section>
       ))}
     </section>
@@ -135,6 +156,19 @@ function loadOrder(availableIds: string[]): string[] {
     );
   } catch {
     return availableIds;
+  }
+}
+
+function loadCollapsed(): string[] {
+  try {
+    const stored = window.localStorage.getItem(COLLAPSED_STORAGE_KEY);
+    if (!stored) return [];
+    const parsed: unknown = JSON.parse(stored);
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string")
+      : [];
+  } catch {
+    return [];
   }
 }
 

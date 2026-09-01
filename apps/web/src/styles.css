@@ -4097,6 +4097,14 @@ button:disabled {
   gap: 12px;
 }
 
+.extreme-toggle,
+.strategy-lab-toggle {
+  min-height: 32px;
+  padding-right: 8px;
+  padding-left: 8px;
+  font-size: 10px;
+}
+
 .alert-preferences {
   gap: 5px;
   color: #697785;
@@ -4931,6 +4939,7 @@ button:disabled {
 
   .extreme-actions {
     justify-content: space-between;
+    flex-wrap: wrap;
   }
 
   .extreme-status {

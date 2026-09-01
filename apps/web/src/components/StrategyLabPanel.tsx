@@ -14,14 +14,16 @@ import type { PaperControl, StrategyLabMember, StrategyLabSnapshot } from "../ty
 
 interface StrategyLabPanelProps {
   snapshot?: StrategyLabSnapshot;
+  enabled: boolean;
   busy: boolean;
   error: string;
   onRun: () => void;
+  onToggle: (enabled: boolean) => void;
   onControl: (strategyId: string, control: PaperControl) => void;
   onBackToDashboard: () => void;
 }
 
-export function StrategyLabPanel({ snapshot, busy, error, onRun, onControl, onBackToDashboard }: StrategyLabPanelProps) {
+export function StrategyLabPanel({ snapshot, enabled, busy, error, onRun, onToggle, onControl, onBackToDashboard }: StrategyLabPanelProps) {
   const [activeId, setActiveId] = useState("");
   const active = snapshot?.strategies.find((strategy) => strategy.id === activeId)
     ?? snapshot?.strategies[0];
@@ -44,11 +46,21 @@ export function StrategyLabPanel({ snapshot, busy, error, onRun, onControl, onBa
           <span className="strategy-lab-timeframe">Timeframe {snapshot ? formatTimeframe(snapshot.timeframe) : "--"}</span>
         </div>
         <div className="strategy-lab-actions">
+          <label className="paper-toggle strategy-lab-toggle">
+            <input
+              type="checkbox"
+              checked={enabled}
+              disabled={busy}
+              onChange={(event) => onToggle(event.target.checked)}
+            />
+            <span className="toggle-track" aria-hidden="true"><span /></span>
+            <span>{enabled ? "Lab on" : "Lab off"}</span>
+          </label>
           <button className="icon-text dashboard-return" type="button" onClick={onBackToDashboard}>
             <ArrowUp size={14} />
             Dashboard
           </button>
-          <button className="icon-text" type="button" disabled={busy} onClick={onRun}>
+          <button className="icon-text" type="button" disabled={busy || !enabled} onClick={onRun}>
             {busy ? <RefreshCcw className="spin" size={15} /> : <Play size={15} />}
             Run all now
           </button>
@@ -57,8 +69,8 @@ export function StrategyLabPanel({ snapshot, busy, error, onRun, onControl, onBa
 
       <div className={`strategy-lab-status ${error ? "error" : ""}`}>
         {error ? <CircleStop size={15} /> : <BrainCircuit size={15} />}
-        <strong>{error ? "Strategy lab error" : "Paper comparison active"}</strong>
-        <span>{error || statusText(snapshot)}</span>
+        <strong>{error ? "Strategy lab error" : enabled ? "Paper comparison active" : "Strategy lab paused"}</strong>
+        <span>{error || (enabled ? statusText(snapshot) : "M1 scalp strategy comparison is deactivated.")}</span>
         <b>Virtual only</b>
       </div>
 

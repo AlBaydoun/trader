@@ -127,6 +127,7 @@ export function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [extremeNotifications, setExtremeNotifications] = useState(loadExtremeNotificationPreferences);
+  const [extremeScannerEnabled, setExtremeScannerEnabled] = useState(loadExtremeScannerEnabled);
   const [scanning, setScanning] = useState(false);
   const [backtest, setBacktest] = useState<Backtest | undefined>();
   const [backtestBusy, setBacktestBusy] = useState(false);
@@ -173,6 +174,7 @@ export function App() {
   const manualPaperMutationRef = useRef(0);
 
   const activeSignal = signals[activeSymbol] ?? Object.values(signals)[0];
+  const strategyLabEnabled = strategyLab?.strategies.some((item) => item.portfolio.engine.enabled) ?? true;
 
   const refresh = useCallback(async () => {
     setScanning(true);
@@ -387,6 +389,7 @@ export function App() {
   }, [activeSignal, soundEnabled, voiceEnabled]);
 
   const refreshExtreme = useCallback(async (force = false) => {
+    if (!extremeScannerEnabled) return;
     const result = await scanExtremeLevels(timeframe, force).catch(() => null);
     if (!result) return;
     setExtremeScan(result);
@@ -402,11 +405,15 @@ export function App() {
     if (extremeAlertIdsRef.current.size > 500) {
       extremeAlertIdsRef.current = new Set(result.recent_alerts.map((alert) => alert.id));
     }
-  }, [extremeNotifications, soundEnabled, timeframe, voiceEnabled]);
+  }, [extremeNotifications, extremeScannerEnabled, soundEnabled, timeframe, voiceEnabled]);
 
   useEffect(() => {
     window.localStorage.setItem("trader:extreme-notifications", JSON.stringify(extremeNotifications));
   }, [extremeNotifications]);
+
+  useEffect(() => {
+    window.localStorage.setItem("trader:extreme-scanner-enabled", String(extremeScannerEnabled));
+  }, [extremeScannerEnabled]);
 
   useEffect(() => {
     const startup = window.setTimeout(() => void refreshExtreme(), 3500);
@@ -724,6 +731,7 @@ export function App() {
   }
 
   async function runExtremeScan() {
+    if (!extremeScannerEnabled) return;
     setExtremeBusy(true);
     try {
       await refreshExtreme(true);
@@ -1001,6 +1009,24 @@ export function App() {
     }
   }
 
+  async function controlStrategyLabAll(enabled: boolean) {
+    const strategies = strategyLab?.strategies ?? [];
+    if (!strategies.length) return;
+    setStrategyLabBusy(true);
+    setStrategyLabError("");
+    try {
+      let snapshot = strategyLab;
+      for (const strategy of strategies) {
+        snapshot = await updateStrategyLabControl(strategy.id, { enabled });
+      }
+      if (snapshot) setStrategyLab(snapshot);
+    } catch (error) {
+      setStrategyLabError(error instanceof Error ? error.message : "Strategy lab control failed.");
+    } finally {
+      setStrategyLabBusy(false);
+    }
+  }
+
   async function closeExtremeVirtualPosition(tradeId: string) {
     setExtremePaperBusy(true);
     setExtremePaperError("");
@@ -1235,6 +1261,43 @@ export function App() {
           onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
         />
       )
+    },
+    {
+      id: "extreme-scanner",
+      label: "85 / 15 Extreme Scanner",
+      collapsible: true,
+      node: (
+        <ExtremeAlertsPanel
+          scan={extremeScan}
+          enabled={extremeScannerEnabled}
+          busy={extremeBusy}
+          soundEnabled={soundEnabled}
+          voiceEnabled={voiceEnabled}
+          upper85NotificationsEnabled={extremeNotifications.upper85}
+          lower15NotificationsEnabled={extremeNotifications.lower15}
+          onUpper85NotificationsToggle={(enabled) => setExtremeNotifications((current) => ({ ...current, upper85: enabled }))}
+          onLower15NotificationsToggle={(enabled) => setExtremeNotifications((current) => ({ ...current, lower15: enabled }))}
+          onToggle={setExtremeScannerEnabled}
+          onRun={() => void runExtremeScan()}
+        />
+      )
+    },
+    {
+      id: "strategy-lab",
+      label: "M1 Scalp Strategy Lab",
+      collapsible: true,
+      node: (
+        <StrategyLabPanel
+          snapshot={strategyLab}
+          enabled={strategyLabEnabled}
+          busy={strategyLabBusy}
+          error={strategyLabError}
+          onRun={() => void runStrategyLabCycleNow()}
+          onToggle={(enabled) => void controlStrategyLabAll(enabled)}
+          onControl={(strategyId, control) => void controlStrategyLab(strategyId, control)}
+          onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+        />
+      )
     }
   ];
 
@@ -1335,25 +1398,6 @@ export function App() {
           onRunBacktest={() => void runBacktest()}
         />
       </div>
-      <ExtremeAlertsPanel
-        scan={extremeScan}
-        busy={extremeBusy}
-        soundEnabled={soundEnabled}
-        voiceEnabled={voiceEnabled}
-        upper85NotificationsEnabled={extremeNotifications.upper85}
-        lower15NotificationsEnabled={extremeNotifications.lower15}
-        onUpper85NotificationsToggle={(enabled) => setExtremeNotifications((current) => ({ ...current, upper85: enabled }))}
-        onLower15NotificationsToggle={(enabled) => setExtremeNotifications((current) => ({ ...current, lower15: enabled }))}
-        onRun={() => void runExtremeScan()}
-      />
-      <StrategyLabPanel
-        snapshot={strategyLab}
-        busy={strategyLabBusy}
-        error={strategyLabError}
-        onRun={() => void runStrategyLabCycleNow()}
-        onControl={(strategyId, control) => void controlStrategyLab(strategyId, control)}
-        onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
-      />
       <PaperBotDock bots={paperBotPanels} />
     </main>
   );
@@ -1429,5 +1473,13 @@ function loadExtremeNotificationPreferences(): { upper85: boolean; lower15: bool
     };
   } catch {
     return { upper85: true, lower15: true };
+  }
+}
+
+function loadExtremeScannerEnabled(): boolean {
+  try {
+    return window.localStorage.getItem("trader:extreme-scanner-enabled") !== "false";
+  } catch {
+    return true;
   }
 }

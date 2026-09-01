@@ -4,6 +4,7 @@ import type { ExtremeAlert, ExtremeReading, ExtremeScan } from "../types";
 
 interface ExtremeAlertsPanelProps {
   scan?: ExtremeScan;
+  enabled: boolean;
   busy: boolean;
   soundEnabled: boolean;
   voiceEnabled: boolean;
@@ -11,11 +12,13 @@ interface ExtremeAlertsPanelProps {
   lower15NotificationsEnabled: boolean;
   onUpper85NotificationsToggle: (enabled: boolean) => void;
   onLower15NotificationsToggle: (enabled: boolean) => void;
+  onToggle: (enabled: boolean) => void;
   onRun: () => void;
 }
 
 export function ExtremeAlertsPanel({
   scan,
+  enabled,
   busy,
   soundEnabled,
   voiceEnabled,
@@ -23,6 +26,7 @@ export function ExtremeAlertsPanel({
   lower15NotificationsEnabled,
   onUpper85NotificationsToggle,
   onLower15NotificationsToggle,
+  onToggle,
   onRun
 }: ExtremeAlertsPanelProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -40,11 +44,21 @@ export function ExtremeAlertsPanel({
           </div>
         </div>
         <div className="extreme-actions">
+          <label className="paper-toggle extreme-toggle">
+            <input
+              type="checkbox"
+              checked={enabled}
+              disabled={busy}
+              onChange={(event) => onToggle(event.target.checked)}
+            />
+            <span className="toggle-track" aria-hidden="true"><span /></span>
+            <span>{enabled ? "Scanner on" : "Scanner off"}</span>
+          </label>
           <span className="alert-preferences">
             <Volume2 size={13} className={soundEnabled ? "active" : ""} />
             <span className={voiceEnabled ? "active" : ""}>Voice</span>
           </span>
-          <button className="icon-text" type="button" disabled={busy} onClick={onRun}>
+          <button className="icon-text" type="button" disabled={busy || !enabled} onClick={onRun}>
             <Radio size={15} className={busy ? "pulse" : ""} />
             Scan now
           </button>
@@ -53,8 +67,8 @@ export function ExtremeAlertsPanel({
 
       <div className="extreme-status">
         <span className={scan?.source === "mt5" ? "live-dot" : ""} />
-        <strong>{scan?.source === "mt5" ? "Live MT5 data" : "Waiting for verified MT5 data"}</strong>
-        <span>{scan ? `${scan.scanned_symbols} of ${scan.available_symbols} instruments scanned` : "The first scan is starting"}</span>
+        <strong>{!enabled ? "Scanner paused" : scan?.source === "mt5" ? "Live MT5 data" : "Waiting for verified MT5 data"}</strong>
+        <span>{!enabled ? "85 / 15 scanning and alerts are deactivated" : scan ? `${scan.scanned_symbols} of ${scan.available_symbols} instruments scanned` : "The first scan is starting"}</span>
         <b>Alert at 85.00 or 15.00</b>
       </div>
 
