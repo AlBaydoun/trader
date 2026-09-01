@@ -23,7 +23,7 @@ This project is **not** a profit guarantee and does not ship with live trading e
 - Separate persistent Candlestick Pattern Bot ledger, defaulting to M15 and recognizing bullish/
   bearish engulfing, morning/evening star, three white soldiers/three black crows, and Doji.
 - Video-derived MA + MTF MACD paper bot and MT5 signal indicator, defaulting to the demonstrated
-  M5 chart with the "10 in 1 different moving averages" ribbon, pullback/reversal confirmation,
+  M5 chart with the "10 in 1 different moving averages" setup (EMA 200/100/50/20 and SMA 1 visible),
   "MacD custom indicator-multiple time frame" agreement, swing/ATR protection, TP1 at 1R, and a
   1.5R final target. The implementation is configurable because the source does not expose every
   proprietary script setting.

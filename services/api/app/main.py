@@ -314,10 +314,11 @@ video_strategy_trader = VideoMAMTFMACDBotService(
         for item in settings.video_strategy_paper_timeframes.split(",")
         if item.strip() in PAPER_TIMEFRAME_OPTIONS
     ) or PAPER_TIMEFRAME_OPTIONS,
-    ma_periods=tuple(
-        int(item.strip())
-        for item in settings.video_strategy_paper_ma_periods.split(",")
+    ma_specs=tuple(
+        (method.strip(), int(period.strip()))
+        for item in settings.video_strategy_paper_ma_specs.split(",")
         if item.strip()
+        for method, period in [item.split(":", 1)]
     ),
     rsi_period=settings.video_strategy_paper_rsi_period,
     partial_r_multiple=settings.video_strategy_paper_partial_r_multiple,

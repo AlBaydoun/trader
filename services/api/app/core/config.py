@@ -120,7 +120,7 @@ class Settings(BaseSettings):
     video_strategy_paper_timeframe_mode: str = Field(default="manual", pattern="^(auto|manual)$")
     video_strategy_paper_timeframe: str = Field(default="5m", pattern="^(1m|5m|15m|1h|4h|1d)$")
     video_strategy_paper_timeframes: str = "1m,5m,15m,1h,4h,1d"
-    video_strategy_paper_ma_periods: str = "5,10,20,30,50,75,100,150,200,250"
+    video_strategy_paper_ma_specs: str = "EMA:200,EMA:100,EMA:50,EMA:20,SMA:1"
     video_strategy_paper_rsi_period: int = Field(default=14, ge=2, le=100)
     video_strategy_paper_partial_r_multiple: float = Field(default=1.0, gt=0, le=5)
     video_strategy_paper_target_r_multiple: float = Field(default=1.5, gt=0, le=10)

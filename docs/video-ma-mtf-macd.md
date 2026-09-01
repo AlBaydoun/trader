@@ -3,18 +3,22 @@
 This paper bot and the matching MT5 indicator are a conservative, configurable interpretation of
 the supplied fast-scalping rules. The requested TradingView concepts are the **10 in 1 different
 moving averages** overlay and **MacD custom indicator-multiple time frame**. The exact script source,
-moving-average periods, and all proprietary inputs were not supplied, so this project does not claim
-to reproduce a proprietary script exactly or to guarantee profit.
+all moving-average lines, and all proprietary inputs were not supplied, so this project does not
+claim to reproduce a proprietary script exactly or to guarantee profit.
 
 ## Rules implemented
 
-The bot evaluates closed candles only. Its default ten-EMA ribbon periods are
-`5, 10, 20, 30, 50, 75, 100, 150, 200, 250`; they can be changed through
-`VIDEO_STRATEGY_PAPER_MA_PERIODS` as ten comma-separated periods.
+The bot evaluates closed candles only. The supplied setup visibly defines these lines:
+`EMA(200)`, `EMA(100)`, `EMA(50)`, `EMA(20)`, and `SMA(1)`. The `SMA(1)` line is retained as a
+reference line but is excluded from trend alignment because it is effectively the current close.
+The visible setup is configured through `VIDEO_STRATEGY_PAPER_MA_SPECS`, for example
+`EMA:200,EMA:100,EMA:50,EMA:20,SMA:1`. Up to ten EMA/SMA lines are supported; MA6-MA10 can be
+added when their settings are available.
 
-1. **Trend:** the close must be on the correct side of the fastest EMA and at least seven of the
-   nine adjacent ribbon relationships must be aligned. The slowest EMA must also slope in that
-   direction.
+1. **Trend:** the close must be on the correct side of the fastest configured trend MA and at least
+   `max(3, N-2)` of the `N` adjacent ribbon relationships must be aligned. With the five visible
+   lines this is three of three relationships. The slowest configured trend MA must also slope in
+   that direction.
 2. **Pullback:** the prior closed candle must touch the fast ribbon or recent support/resistance,
    within the configured ATR tolerance, and close as a counter-direction correction.
 3. **Momentum:** the latest closed candle must confirm the move through a reversal candle/breakout
@@ -53,7 +57,7 @@ you want the history to survive API restarts.
 
 `integrations/mt5/TraderAI_VideoMAMTFMACD.mq5` is a separate, signal-only MT5 companion for chart
 visualization and alerts. The workstation paper bot is the authoritative implementation of the
-ten-period ribbon/pullback/RSI gate described above. Alerts are disabled by default and can be
+MA-setup/pullback/RSI gate described above. Alerts are disabled by default and can be
 enabled in the indicator inputs. Push and email alerts depend on the notification details
 configured inside MT5. The file contains no `CTrade`, `OrderSend`, or other order-placement call.
 

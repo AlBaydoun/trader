@@ -28,7 +28,13 @@ HIGHER_TIMEFRAME = {
     "4h": "1d",
     "1d": "1d",
 }
-VIDEO_MA_PERIODS = (5, 10, 20, 30, 50, 75, 100, 150, 200, 250)
+VIDEO_MA_SPECS = (
+    ("ema", 200),
+    ("ema", 100),
+    ("ema", 50),
+    ("ema", 20),
+    ("sma", 1),
+)
 
 
 class VideoMAMTFMACDBotService:
@@ -44,7 +50,8 @@ class VideoMAMTFMACDBotService:
         *,
         timeframe_options: Sequence[str] = SUPPORTED_TIMEFRAMES,
         target_r_multiple: float = 1.5,
-        ma_periods: Sequence[int] = VIDEO_MA_PERIODS,
+        ma_specs: Sequence[tuple[str, int]] = VIDEO_MA_SPECS,
+        ma_periods: Sequence[int] | None = None,
         rsi_period: int = 14,
         macd_fast: int = 12,
         macd_slow: int = 26,
@@ -60,7 +67,9 @@ class VideoMAMTFMACDBotService:
             or SUPPORTED_TIMEFRAMES
         )
         self.target_r_multiple = target_r_multiple
-        self.ma_periods = _normalise_ma_periods(ma_periods)
+        if ma_periods is not None:
+            ma_specs = tuple(("ema", period) for period in ma_periods)
+        self.ma_specs = _normalise_ma_specs(ma_specs)
         self.rsi_period = rsi_period
         self.macd_fast = macd_fast
         self.macd_slow = macd_slow
@@ -165,7 +174,7 @@ class VideoMAMTFMACDBotService:
         symbols, candles_by_symbol = self.bridge.scan_market_candles(
             account,
             timeframe,
-            max(260, max(self.ma_periods) + 20),
+            max(260, max(period for _, period in self.ma_specs) + 20),
             max_symbols,
             force=force,
         )
@@ -219,14 +228,17 @@ class VideoMAMTFMACDBotService:
         now: datetime,
     ) -> MarketOpportunity | None:
         minimum_candles = max(
-            max(self.ma_periods) + 3,
+            max(period for _, period in self.ma_specs) + 3,
             self.macd_slow + self.macd_signal + 3,
             220,
         )
         if len(candles) < minimum_candles or metadata is None:
             return None
         values = [candle.close for candle in candles]
-        moving_averages = [_ema_series(values, period) for period in self.ma_periods]
+        moving_averages = [
+            _moving_average_series(values, method, period)
+            for method, period in self.ma_specs
+        ]
         current_macd, current_signal, current_histogram = _macd(
             values,
             self.macd_fast,
@@ -250,12 +262,18 @@ class VideoMAMTFMACDBotService:
         if not isfinite(atr) or atr <= 0 or latest.close <= 0:
             return None
 
-        latest_ribbon = [series[-1] for series in moving_averages]
-        previous_ribbon = [series[-2] for series in moving_averages]
+        trend_series = [
+            series
+            for (_, period), series in zip(self.ma_specs, moving_averages, strict=True)
+            if period > 1
+        ][::-1]
+        latest_ribbon = [series[-1] for series in trend_series]
+        previous_ribbon = [series[-2] for series in trend_series]
+        alignment_required = max(3, len(latest_ribbon) - 2)
         bullish_alignment = _ribbon_alignment(latest_ribbon, True)
         bearish_alignment = _ribbon_alignment(latest_ribbon, False)
-        bullish_slope = latest_ribbon[-1] > moving_averages[-1][-3]
-        bearish_slope = latest_ribbon[-1] < moving_averages[-1][-3]
+        bullish_slope = latest_ribbon[-1] > trend_series[-1][-3]
+        bearish_slope = latest_ribbon[-1] < trend_series[-1][-3]
         pullback_window = candles[-max(self.swing_lookback * 2 + 2, 8) : -1]
         support = min(item.low for item in pullback_window)
         resistance = max(item.high for item in pullback_window)
@@ -299,7 +317,7 @@ class VideoMAMTFMACDBotService:
         )
         bullish = (
             latest.close > latest_ribbon[0]
-            and bullish_alignment >= 7
+            and bullish_alignment >= alignment_required
             and bullish_slope
             and bullish_pullback
             and (bullish_candle_reversal or bullish_rsi_reversal)
@@ -307,7 +325,7 @@ class VideoMAMTFMACDBotService:
         )
         bearish = (
             latest.close < latest_ribbon[0]
-            and bearish_alignment >= 7
+            and bearish_alignment >= alignment_required
             and bearish_slope
             and bearish_pullback
             and (bearish_candle_reversal or bearish_rsi_reversal)
@@ -330,7 +348,8 @@ class VideoMAMTFMACDBotService:
             partial_take_profit = latest.close + risk_distance * self.partial_r_multiple
             impact: Literal["bullish", "bearish"] = "bullish"
             trend_message = (
-                f"Closed price is above the fastest EMA and {bullish_alignment}/9 ribbon "
+                f"Closed price is above the fastest trend MA and {bullish_alignment}/"
+                f"{len(latest_ribbon) - 1} ribbon "
                 "relationships are bullish."
             )
             direction_message = (
@@ -355,7 +374,8 @@ class VideoMAMTFMACDBotService:
             partial_take_profit = latest.close - risk_distance * self.partial_r_multiple
             impact = "bearish"
             trend_message = (
-                f"Closed price is below the fastest EMA and {bearish_alignment}/9 ribbon "
+                f"Closed price is below the fastest trend MA and {bearish_alignment}/"
+                f"{len(latest_ribbon) - 1} ribbon "
                 "relationships are bearish."
             )
             direction_message = (
@@ -406,7 +426,7 @@ class VideoMAMTFMACDBotService:
         return MarketOpportunity(
             rank=0,
             symbol=symbol,
-            description=f"{symbol} 10-in-1 EMA ribbon pullback + MTF MACD setup",
+            description=f"{symbol} 10-in-1 MA setup with pullback + CM MTF MACD",
             category=self.name,
             direction=direction,
             confidence=round(min(0.96, 0.72 + score / 400), 3),
@@ -504,11 +524,19 @@ def _sma_series(values: Sequence[float], period: int) -> list[float]:
     return result
 
 
-def _normalise_ma_periods(periods: Sequence[int]) -> tuple[int, ...]:
-    normalised = tuple(sorted({int(period) for period in periods}))
-    if len(normalised) != 10 or any(period < 2 for period in normalised):
-        raise ValueError("The video strategy requires exactly ten moving-average periods >= 2.")
+def _normalise_ma_specs(specs: Sequence[tuple[str, int]]) -> tuple[tuple[str, int], ...]:
+    normalised = tuple((str(method).casefold(), int(period)) for method, period in specs)
+    if not 1 <= len(normalised) <= 10:
+        raise ValueError("The video strategy supports one to ten moving-average lines.")
+    if any(method not in {"ema", "sma"} or period < 1 for method, period in normalised):
+        raise ValueError("Moving-average lines must use EMA or SMA with a period >= 1.")
+    if sum(period > 1 for _, period in normalised) < 2:
+        raise ValueError("The video strategy needs at least two trend moving-average lines.")
     return normalised
+
+
+def _moving_average_series(values: Sequence[float], method: str, period: int) -> list[float]:
+    return _sma_series(values, period) if method == "sma" else _ema_series(values, period)
 
 
 def _ribbon_alignment(values: Sequence[float], bullish: bool) -> int:
