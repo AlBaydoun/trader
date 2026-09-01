@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp, GripVertical } from "lucide-react";
 import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 
-const ORDER_STORAGE_KEY = "trader:paper-bot-order";
+const ORDER_STORAGE_KEY = "trader:paper-bot-order-v2";
 
 export interface PaperBotDockItem {
   id: string;

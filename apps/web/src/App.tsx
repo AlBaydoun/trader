@@ -1067,23 +1067,6 @@ export function App() {
 
   const paperBotPanels = [
     {
-      id: "paper",
-      label: "Virtual Trading",
-      node: (
-        <PaperTradingPanel
-          portfolio={paperPortfolio}
-          busy={paperBusy}
-          error={paperError}
-          onNoteSave={(tradeId, note) => void savePaperTradeNote(tradeId, note)}
-          onControl={(control) => void controlPaper(control)}
-          onRun={() => void runVirtualCycle()}
-          onClose={(tradeId) => void closeVirtualPosition(tradeId)}
-          onReset={() => void resetVirtualPortfolio()}
-          onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
-        />
-      )
-    },
-    {
       id: "manual",
       label: "Manual Trading Bot",
       node: (
@@ -1113,6 +1096,23 @@ export function App() {
           onRun={() => void runManualTradingCycle()}
           onClose={(tradeId) => void closeManualTradingPosition(tradeId)}
           onReset={() => void resetManualTradingPortfolio()}
+          onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
+        />
+      )
+    },
+    {
+      id: "paper",
+      label: "Market Scanner",
+      node: (
+        <PaperTradingPanel
+          portfolio={paperPortfolio}
+          busy={paperBusy}
+          error={paperError}
+          onNoteSave={(tradeId, note) => void savePaperTradeNote(tradeId, note)}
+          onControl={(control) => void controlPaper(control)}
+          onRun={() => void runVirtualCycle()}
+          onClose={(tradeId) => void closeVirtualPosition(tradeId)}
+          onReset={() => void resetVirtualPortfolio()}
           onBackToDashboard={() => scrollToPanel("virtual-dashboard")}
         />
       )
