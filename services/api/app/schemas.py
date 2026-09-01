@@ -113,6 +113,15 @@ class PaperTradeDTO(APIModel):
     signal_level: str | None
     signal_recommendation: str | None
     note: str
+    initial_quantity: float | None = None
+    remaining_entry_fee: float | None = None
+    quantity_closed: float = 0.0
+    partial_take_profit: float | None = None
+    partial_close_price: float | None = None
+    partial_closed_at: datetime | None = None
+    partial_gross_pnl: float = 0.0
+    partial_pnl: float = 0.0
+    breakeven_activated: bool = False
 
 
 class PaperDecisionDTO(APIModel):
@@ -508,6 +517,7 @@ class MarketOpportunityDTO(APIModel):
     quote_age_seconds: int | None
     recommendation: str
     reasons: list[ReasonDTO]
+    partial_take_profit: float | None = None
 
 
 class MarketScanDTO(APIModel):

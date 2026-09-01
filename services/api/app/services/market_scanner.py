@@ -30,6 +30,7 @@ class MarketOpportunity:
     signal_price: float | None = None
     signal_level: str | None = None
     signal_recommendation: str | None = None
+    partial_take_profit: float | None = None
 
 
 @dataclass(frozen=True)

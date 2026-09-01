@@ -120,6 +120,10 @@ class Settings(BaseSettings):
     video_strategy_paper_timeframe_mode: str = Field(default="manual", pattern="^(auto|manual)$")
     video_strategy_paper_timeframe: str = Field(default="5m", pattern="^(1m|5m|15m|1h|4h|1d)$")
     video_strategy_paper_timeframes: str = "1m,5m,15m,1h,4h,1d"
+    video_strategy_paper_ma_periods: str = "5,10,20,30,50,75,100,150,200,250"
+    video_strategy_paper_rsi_period: int = Field(default=14, ge=2, le=100)
+    video_strategy_paper_partial_r_multiple: float = Field(default=1.0, gt=0, le=5)
+    video_strategy_paper_target_r_multiple: float = Field(default=1.5, gt=0, le=10)
     video_strategy_paper_starting_balance: float = Field(default=10000.0, gt=0)
     video_strategy_paper_risk_per_trade_pct: float = Field(default=0.05, ge=0.01, le=2.0)
     video_strategy_paper_max_open_positions: int = Field(default=5, ge=1, le=200)

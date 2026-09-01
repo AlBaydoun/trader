@@ -321,6 +321,15 @@ export interface PaperTrade {
   signal_level: string | null;
   signal_recommendation: string | null;
   note: string;
+  initial_quantity?: number | null;
+  remaining_entry_fee?: number | null;
+  quantity_closed?: number;
+  partial_take_profit?: number | null;
+  partial_close_price?: number | null;
+  partial_closed_at?: string | null;
+  partial_gross_pnl?: number;
+  partial_pnl?: number;
+  breakeven_activated?: boolean;
 }
 
 export interface PaperDecision {

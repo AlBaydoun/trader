@@ -314,6 +314,14 @@ video_strategy_trader = VideoMAMTFMACDBotService(
         for item in settings.video_strategy_paper_timeframes.split(",")
         if item.strip() in PAPER_TIMEFRAME_OPTIONS
     ) or PAPER_TIMEFRAME_OPTIONS,
+    ma_periods=tuple(
+        int(item.strip())
+        for item in settings.video_strategy_paper_ma_periods.split(",")
+        if item.strip()
+    ),
+    rsi_period=settings.video_strategy_paper_rsi_period,
+    partial_r_multiple=settings.video_strategy_paper_partial_r_multiple,
+    target_r_multiple=settings.video_strategy_paper_target_r_multiple,
 )
 strategy_lab = ScalpStrategyLabService(
     [

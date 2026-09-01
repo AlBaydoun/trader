@@ -23,9 +23,10 @@ This project is **not** a profit guarantee and does not ship with live trading e
 - Separate persistent Candlestick Pattern Bot ledger, defaulting to M15 and recognizing bullish/
   bearish engulfing, morning/evening star, three white soldiers/three black crows, and Doji.
 - Video-derived MA + MTF MACD paper bot and MT5 signal indicator, defaulting to the demonstrated
-  M5 chart with EMA(200), EMA(9/36), higher-timeframe MACD confirmation, swing/ATR stop, and 2R
-  target. The implementation is configurable because the video does not expose a complete
-  proprietary rule set.
+  M5 chart with the "10 in 1 different moving averages" ribbon, pullback/reversal confirmation,
+  "MacD custom indicator-multiple time frame" agreement, swing/ATR protection, TP1 at 1R, and a
+  1.5R final target. The implementation is configurable because the source does not expose every
+  proprietary script setting.
 - Automatic timeframe selection across the paper bots compares configured timeframes and records
   the selected timeframe on every virtual trade; Manual mode can force a timeframe. Jdub Traders
   preserves its exact M1 opening-range/M5 confirmation behavior on M1 and uses an explicit

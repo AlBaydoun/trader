@@ -65,6 +65,15 @@ class PaperTrade:
     signal_level: str | None = None
     signal_recommendation: str | None = None
     note: str = ""
+    initial_quantity: float | None = None
+    remaining_entry_fee: float | None = None
+    quantity_closed: float = 0.0
+    partial_take_profit: float | None = None
+    partial_close_price: float | None = None
+    partial_closed_at: datetime | None = None
+    partial_gross_pnl: float = 0.0
+    partial_pnl: float = 0.0
+    breakeven_activated: bool = False
 
 
 @dataclass
@@ -326,6 +335,8 @@ class PaperTradingService:
                 opened_at=now,
                 updated_at=now,
             )
+            trade.initial_quantity = trade.quantity
+            trade.remaining_entry_fee = trade.entry_fee
             self.trades.append(trade)
             self._decision(
                 cycle_id="manual",
@@ -400,6 +411,8 @@ class PaperTradingService:
                 updated_at=now,
                 note=note.strip(),
             )
+            trade.initial_quantity = trade.quantity
+            trade.remaining_entry_fee = trade.entry_fee
             self.trades.append(trade)
             self.source_account_id = source_account_id
             self._decision(
@@ -503,6 +516,12 @@ class PaperTradingService:
                     continue
                 self._mark_trade(trade, candle)
                 exit_price, exit_reason = self._exit_trigger(trade, candle, cycle_time)
+                if exit_price is None:
+                    self._apply_partial_profit(trade, candle, cycle_id)
+                    self._mark_trade(trade, candle)
+                    if self._take_profit_reached(trade, candle):
+                        exit_price = trade.take_profit
+                        exit_reason = "take_profit"
                 current_opportunity = by_symbol.get(trade.symbol)
                 if (
                     exit_price is None
@@ -797,6 +816,9 @@ class PaperTradingService:
             signal_price=opportunity.signal_price or opportunity.entry,
             signal_level=opportunity.signal_level,
             signal_recommendation=opportunity.signal_recommendation or opportunity.recommendation,
+            initial_quantity=round(quantity, 8),
+            remaining_entry_fee=self._fee(entry, quantity),
+            partial_take_profit=opportunity.partial_take_profit,
         )
         self.trades.append(trade)
         return trade
@@ -812,11 +834,85 @@ class PaperTradingService:
         trade.max_adverse_excursion = round(min(trade.max_adverse_excursion, adverse), 2)
         estimated_exit_fee = self._fee(candle.close, trade.quantity)
         gross = self._gross_pnl(trade, candle.close)
-        trade.unrealized_pnl = round(gross - trade.entry_fee - estimated_exit_fee, 2)
-        notional = abs(trade.entry_price * trade.quantity)
+        remaining_entry_fee = (
+            trade.remaining_entry_fee
+            if trade.remaining_entry_fee is not None
+            else trade.entry_fee
+        )
+        trade.unrealized_pnl = round(
+            trade.partial_pnl
+            + gross
+            - remaining_entry_fee
+            - trade.exit_fee
+            - estimated_exit_fee,
+            2,
+        )
+        notional = abs(trade.entry_price * (trade.initial_quantity or trade.quantity))
         trade.return_pct = round(trade.unrealized_pnl / notional * 100, 3) if notional else 0.0
         trade.r_multiple = (
             round(trade.unrealized_pnl / trade.risk_amount, 3) if trade.risk_amount else 0.0
+        )
+
+    def _apply_partial_profit(self, trade: PaperTrade, candle: Candle, cycle_id: str) -> None:
+        """Take the configured first target once, then protect the remainder at entry."""
+        if (
+            trade.partial_take_profit is None
+            or trade.partial_closed_at is not None
+            or trade.quantity <= 0
+        ):
+            return
+        reached = (
+            candle.high >= trade.partial_take_profit
+            if trade.direction == Direction.buy
+            else candle.low <= trade.partial_take_profit
+        )
+        if not reached:
+            return
+        closed_quantity = round(trade.quantity * 0.5, 8)
+        if closed_quantity <= 0:
+            return
+        partial_price = trade.partial_take_profit
+        remaining_entry_fee = (
+            trade.remaining_entry_fee
+            if trade.remaining_entry_fee is not None
+            else trade.entry_fee
+        )
+        allocated_entry_fee = remaining_entry_fee * closed_quantity / trade.quantity
+        exit_fee = self._fee(partial_price, closed_quantity)
+        gross_pnl = self._gross_pnl_for_quantity(trade, partial_price, closed_quantity)
+        net_pnl = gross_pnl - allocated_entry_fee - exit_fee
+        trade.quantity = round(trade.quantity - closed_quantity, 8)
+        trade.quantity_closed = round(trade.quantity_closed + closed_quantity, 8)
+        trade.remaining_entry_fee = round(max(0.0, remaining_entry_fee - allocated_entry_fee), 2)
+        trade.partial_take_profit = round(partial_price, 8)
+        trade.partial_close_price = round(partial_price, 8)
+        trade.partial_closed_at = candle.ts
+        trade.partial_gross_pnl = round(trade.partial_gross_pnl + gross_pnl, 2)
+        trade.partial_pnl = round(trade.partial_pnl + net_pnl, 2)
+        trade.exit_fee = round(trade.exit_fee + exit_fee, 2)
+        trade.stop_loss = round(trade.entry_price, 8)
+        trade.breakeven_activated = True
+        trade.updated_at = datetime.now(UTC)
+        self._decision(
+            cycle_id=cycle_id,
+            action="control",
+            outcome="partial_profit",
+            reason=(
+                f"First objective reached at {partial_price:.8g}; closed 50% of the virtual "
+                f"position for {net_pnl:.2f} and moved the remaining stop to breakeven."
+            ),
+            symbol=trade.symbol,
+            trade=trade,
+        )
+
+    @staticmethod
+    def _take_profit_reached(trade: PaperTrade, candle: Candle) -> bool:
+        if trade.take_profit is None:
+            return False
+        return (
+            candle.high >= trade.take_profit
+            if trade.direction == Direction.buy
+            else candle.low <= trade.take_profit
         )
 
     def _exit_trigger(
@@ -853,11 +949,25 @@ class PaperTradingService:
         trade.exit_reason = exit_reason
         trade.closed_at = now
         trade.updated_at = now
-        trade.exit_fee = self._fee(exit_price, trade.quantity)
-        trade.gross_pnl = round(self._gross_pnl(trade, exit_price), 2)
-        trade.net_pnl = round(trade.gross_pnl - trade.entry_fee - trade.exit_fee, 2)
+        final_exit_fee = self._fee(exit_price, trade.quantity)
+        trade.exit_fee = round(trade.exit_fee + final_exit_fee, 2)
+        trade.gross_pnl = round(
+            trade.partial_gross_pnl + self._gross_pnl(trade, exit_price), 2
+        )
+        remaining_entry_fee = (
+            trade.remaining_entry_fee
+            if trade.remaining_entry_fee is not None
+            else trade.entry_fee
+        )
+        trade.net_pnl = round(
+            trade.partial_pnl
+            + self._gross_pnl(trade, exit_price)
+            - remaining_entry_fee
+            - final_exit_fee,
+            2,
+        )
         trade.unrealized_pnl = 0.0
-        notional = abs(trade.entry_price * trade.quantity)
+        notional = abs(trade.entry_price * (trade.initial_quantity or trade.quantity))
         trade.return_pct = round(trade.net_pnl / notional * 100, 3) if notional else 0.0
         trade.r_multiple = round(trade.net_pnl / trade.risk_amount, 3) if trade.risk_amount else 0.0
         self.closed_last_cycle += 1
@@ -981,8 +1091,12 @@ class PaperTradingService:
 
     @staticmethod
     def _gross_pnl(trade: PaperTrade, price: float) -> float:
+        return PaperTradingService._gross_pnl_for_quantity(trade, price, trade.quantity)
+
+    @staticmethod
+    def _gross_pnl_for_quantity(trade: PaperTrade, price: float, quantity: float) -> float:
         multiplier = 1 if trade.direction == Direction.buy else -1
-        return (price - trade.entry_price) * trade.quantity * multiplier
+        return (price - trade.entry_price) * quantity * multiplier
 
     def _open_trades(self) -> list[PaperTrade]:
         return [trade for trade in self.trades if trade.status == "open"]
@@ -1448,14 +1562,20 @@ class PaperTradingService:
 
     @staticmethod
     def _trade_from_dict(payload: dict[str, Any]) -> PaperTrade:
+        normalized = {
+            **payload,
+            "direction": Direction(payload["direction"]),
+            "opened_at": PaperTradingService._parse_datetime(payload["opened_at"]),
+            "updated_at": PaperTradingService._parse_datetime(payload["updated_at"]),
+            "closed_at": PaperTradingService._parse_datetime(payload.get("closed_at")),
+            "partial_closed_at": PaperTradingService._parse_datetime(
+                payload.get("partial_closed_at")
+            ),
+        }
+        normalized.setdefault("initial_quantity", payload.get("quantity"))
+        normalized.setdefault("remaining_entry_fee", payload.get("entry_fee", 0.0))
         return PaperTrade(
-            **{
-                **payload,
-                "direction": Direction(payload["direction"]),
-                "opened_at": PaperTradingService._parse_datetime(payload["opened_at"]),
-                "updated_at": PaperTradingService._parse_datetime(payload["updated_at"]),
-                "closed_at": PaperTradingService._parse_datetime(payload.get("closed_at")),
-            }
+            **normalized
         )
 
     @staticmethod

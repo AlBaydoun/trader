@@ -116,7 +116,7 @@ export function PaperTradingPanel({
           <span className="paper-title-icon"><FlaskConical size={19} /></span>
           <div>
             <h2>{manual ? "Manual Trading Bot" : extreme ? "Extreme Virtual Trading" : jdub ? "Jdub Traders" : rigorgate ? "RigorGate" : candlestick ? candlestickName : videoStrategy ? "Video MA + MTF MACD Bot" : "Virtual Trading"}</h2>
-            <span>{manual ? "Operator-controlled entries with live price monitoring · no real money" : extreme ? "Confirmed 85/15 reversal simulation with no real money" : jdub ? "New York opening-range simulation with no real money" : rigorgate ? "BUY / WAIT / SELL evidence-gated simulation with no real money" : candlestick ? candlestickDescription : videoStrategy ? "Video-derived EMA and multi-timeframe MACD simulation with no real money" : "Automatic whole-market simulation · configurable timeframe"}</span>
+            <span>{manual ? "Operator-controlled entries with live price monitoring · no real money" : extreme ? "Confirmed 85/15 reversal simulation with no real money" : jdub ? "New York opening-range simulation with no real money" : rigorgate ? "BUY / WAIT / SELL evidence-gated simulation with no real money" : candlestick ? candlestickDescription : videoStrategy ? "10 in 1 Different Moving Averages + MACD Custom Multiple Time Frame paper simulation" : "Automatic whole-market simulation · configurable timeframe"}</span>
           </div>
           <span className="paper-timeframe-badge">
             Timeframe {engine ? formatTimeframe(engine.timeframe) : "--"}
@@ -255,12 +255,12 @@ export function PaperTradingPanel({
               <div className="paper-subheading">
                 <div>
                   <strong>Simulation rules</strong>
-                <span>{manual ? "Only operator-submitted entries; live MT5 prices manage exits" : extreme ? "Applied only after RSI(1), MACD, and MA confirmation" : jdub ? "15m New York range, 5m close, then 1m trigger" : rigorgate ? "BUY opens a long; WAIT does nothing; SELL closes a matching long" : candlestick ? candlestickRules : videoStrategy ? "EMA(200) regime · EMA(9/36) direction · higher-timeframe MACD · 2R target" : "Applied to every eligible directional signal on the selected timeframe"}</span>
+                <span>{manual ? "Only operator-submitted entries; live MT5 prices manage exits" : extreme ? "Applied only after RSI(1), MACD, and MA confirmation" : jdub ? "15m New York range, 5m close, then 1m trigger" : rigorgate ? "BUY opens a long; WAIT does nothing; SELL closes a matching long" : candlestick ? candlestickRules : videoStrategy ? "10-in-1 EMA ribbon · pullback to MA/support · MTF MACD + RSI/candle momentum · 1.5R target" : "Applied to every eligible directional signal on the selected timeframe"}</span>
                 </div>
               </div>
               <dl>
                 <div><dt>Market coverage</dt><dd>{engine.scanned_symbols || "--"} instruments</dd></div>
-                <div><dt>Entry filter</dt><dd>{manual ? "Operator controlled" : extreme ? `Confirmed 85/15 · score ${engine.minimum_opportunity_score}+` : jdub ? `Opening range · score ${engine.minimum_opportunity_score}+` : rigorgate ? `BUY / SELL gate · score ${engine.minimum_opportunity_score}+` : candlestick ? `${candlestickFilter} · score ${engine.minimum_opportunity_score}+` : videoStrategy ? `EMA + MTF MACD · score ${engine.minimum_opportunity_score}+` : engine.minimum_opportunity_score === 0 ? "All strategy signals" : `Score ${engine.minimum_opportunity_score}+`}</dd></div>
+                <div><dt>Entry filter</dt><dd>{manual ? "Operator controlled" : extreme ? `Confirmed 85/15 · score ${engine.minimum_opportunity_score}+` : jdub ? `Opening range · score ${engine.minimum_opportunity_score}+` : rigorgate ? `BUY / SELL gate · score ${engine.minimum_opportunity_score}+` : candlestick ? `${candlestickFilter} · score ${engine.minimum_opportunity_score}+` : videoStrategy ? `Ribbon + pullback + MTF MACD · score ${engine.minimum_opportunity_score}+` : engine.minimum_opportunity_score === 0 ? "All strategy signals" : `Score ${engine.minimum_opportunity_score}+`}</dd></div>
                 <div><dt>Risk per trade</dt><dd>{engine.risk_per_trade_pct.toFixed(2)}%</dd></div>
                 <div><dt>Position limit</dt><dd>{engine.max_open_positions}</dd></div>
                 <div><dt>Cycle</dt><dd>{engine.timeframe_mode === "auto" ? `Auto · ${engine.timeframe}` : engine.timeframe} / {engine.cycle_interval_seconds}s</dd></div>
@@ -612,7 +612,7 @@ function OpenTrades({ trades, onClose, onNoteSave, busy, extreme, manual }: { tr
             <td><strong>{trade.symbol}</strong><span className={`side ${trade.direction}`}>{trade.direction}</span></td>
             <td title={`Executed on ${trade.timeframe}`}><strong>{formatTimeframe(trade.timeframe)}</strong><span>Entry execution</span></td>
             <td>{price(extreme ? trade.signal_price ?? trade.entry_price : trade.entry_price)}<span>{extreme ? `Fill ${price(trade.entry_price)}` : price(trade.current_price)}</span>{extreme && <small>Now {price(trade.current_price)}</small>}</td>
-            <td>{price(trade.stop_loss)}<span>{price(trade.take_profit)}</span></td>
+            <td>{price(trade.stop_loss)}<span>{price(trade.take_profit)}</span>{trade.partial_take_profit != null && <small>{trade.breakeven_activated ? "BE protected" : `TP1 ${price(trade.partial_take_profit)}`}</small>}</td>
             <td>{trade.quantity.toPrecision(5)}<span>{money(trade.risk_amount)} risk</span></td>
             <td className={pnlClass(trade.unrealized_pnl)}><strong>{signedMoney(trade.unrealized_pnl)}</strong><span>{trade.r_multiple.toFixed(2)}R</span></td>
             <td>{extreme && trade.signal_level ? <strong>{levelLabel(trade.signal_level)}</strong> : `${Math.round(trade.confidence * 100)}%`}<span title={trade.signal_recommendation ?? trade.reasons.join(" ")}>{extreme ? "Confirmed RSI + MACD + MA" : `Score ${trade.opportunity_score.toFixed(1)}`}</span></td>
@@ -639,7 +639,7 @@ function TradeHistory({ trades, extreme, onNoteSave }: { trades: PaperTrade[]; e
             <td>{extreme && trade.signal_level ? levelLabel(trade.signal_level) : price(trade.entry_price)}<span>{extreme ? `${price(trade.signal_price ?? trade.entry_price)} fill ${price(trade.entry_price)}` : price(trade.exit_price)}</span>{extreme && <small>Exit {price(trade.exit_price)}</small>}</td>
             <td className="trade-event-time" title={`${new Date(trade.opened_at).toISOString()} UTC`}><strong>{exactDateTime(trade.opened_at)}</strong><span>{timeZoneLabel()}</span></td>
             <td className="trade-event-time" title={trade.closed_at ? `${new Date(trade.closed_at).toISOString()} UTC` : "Trade is still open"}>{trade.closed_at ? <strong>{exactDateTime(trade.closed_at)}</strong> : <strong>--</strong>}<span>{trade.closed_at ? timeZoneLabel() : "Not closed"}</span></td>
-            <td className={pnlClass(trade.net_pnl)}><strong>{signedMoney(trade.net_pnl)}</strong><span>{trade.r_multiple.toFixed(2)}R / {trade.return_pct.toFixed(3)}%</span></td>
+            <td className={pnlClass(trade.net_pnl)}><strong>{signedMoney(trade.net_pnl)}</strong><span>{trade.r_multiple.toFixed(2)}R / {trade.return_pct.toFixed(3)}%</span>{trade.partial_pnl ? <small>{signedMoney(trade.partial_pnl)} TP1</small> : null}</td>
             <td>{signedMoney(trade.max_favorable_excursion)}<span>{signedMoney(trade.max_adverse_excursion)}</span></td>
             <td>{money(trade.entry_fee + trade.exit_fee)}<span>virtual fees</span></td>
             <td>{exitLabel(trade.exit_reason)}<span>{trade.closed_at ? "Exit recorded" : "Open"}</span></td>

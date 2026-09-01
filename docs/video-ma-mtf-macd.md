@@ -1,25 +1,32 @@
 # Video MA + MTF MACD Strategy
 
 This paper bot and the matching MT5 indicator are a conservative, configurable interpretation of
-the uploaded video. The video clearly shows a Gold Spot / U.S. Dollar M5 chart, a 10-in-1 moving
-average overlay with EMA(200) visible, and a custom multi-timeframe MACD-style confirmation. It
-does not clearly expose every input or state a complete mechanical entry, exit, and position-sizing
-specification. This project therefore does not claim to reproduce a proprietary script exactly.
+the supplied fast-scalping rules. The requested TradingView concepts are the **10 in 1 different
+moving averages** overlay and **MacD custom indicator-multiple time frame**. The exact script source,
+moving-average periods, and all proprietary inputs were not supplied, so this project does not claim
+to reproduce a proprietary script exactly or to guarantee profit.
 
 ## Rules implemented
 
-The bot evaluates closed candles only:
+The bot evaluates closed candles only. Its default ten-EMA ribbon periods are
+`5, 10, 20, 30, 50, 75, 100, 150, 200, 250`; they can be changed through
+`VIDEO_STRATEGY_PAPER_MA_PERIODS` as ten comma-separated periods.
 
-1. **Regime:** BUY setups must close above EMA(200); SELL setups must close below it.
-2. **Direction:** EMA(9) must be above EMA(36) for BUY or below it for SELL.
-3. **Trigger:** the latest candle must complete a fresh EMA(9)/EMA(36) cross or reclaim EMA(9)
-   after a pullback. This prevents repeated entries on every cycle while a trend simply persists.
-4. **MACD confirmation:** the current timeframe and the next higher timeframe must agree on MACD
-   line versus signal line and histogram sign. The default M5 chart confirms with M15.
-5. **Candle quality:** the latest closed candle must point in the trade direction and have a body
-   of at least 35% of its high-low range.
-6. **Risk model:** the stop is beyond the recent five-candle swing with a 0.2 ATR buffer. The
-   default target is 2.0R. Position size is calculated by the existing paper ledger's risk budget.
+1. **Trend:** the close must be on the correct side of the fastest EMA and at least seven of the
+   nine adjacent ribbon relationships must be aligned. The slowest EMA must also slope in that
+   direction.
+2. **Pullback:** the prior closed candle must touch the fast ribbon or recent support/resistance,
+   within the configured ATR tolerance, and close as a counter-direction correction.
+3. **Momentum:** the latest closed candle must confirm the move through a reversal candle/breakout
+   or an RSI reversal. This includes the engulfing-style confirmation visible in the reference.
+4. **MACD confirmation:** the current timeframe and the next higher timeframe must agree on the
+   custom MACD line versus signal line and histogram sign. The default M5 chart confirms with M15.
+5. **Risk model:** the stop is beyond the recent five-candle swing with a 0.2 ATR buffer. TP1 is
+   1.0R; the final target defaults to 1.5R. At TP1 the paper ledger closes half the virtual size and
+   moves the remaining stop to breakeven. Position size is calculated by the existing risk budget.
+6. **Market conditions:** stale quotes are not treated as live opportunities, and spread is
+   penalized in ranking. News analysis remains an additional context/risk input rather than a
+   promise that a signal will work.
 
 The service ranks symbols across the configured MT5 market universe and records each reason with
 the virtual trade. Auto timeframe mode evaluates the configured list and keeps the strongest
@@ -31,7 +38,8 @@ that is the timeframe visible in the video.
 The new **Video MA + MTF MACD Bot** card is in the Virtual Trader Dashboard. Its ledger includes:
 
 - open positions and full closed history;
-- timeframe, signal time, entry, stop, target, virtual fees, P/L, R-multiple, and excursion;
+- timeframe, signal time, entry, stop, TP1, final target, virtual fees, P/L, R-multiple, and excursion;
+- partial result, remaining virtual size, and breakeven-protection state;
 - daily reports, decision log, persistent state, and paper-learning lessons;
 - automatic/manual timeframe selection, minimum score, position limit, pause/resume, run-now,
   close, and reset controls.
@@ -41,10 +49,11 @@ you want the history to survive API restarts.
 
 ## MT5 indicator
 
-`integrations/mt5/TraderAI_VideoMAMTFMACD.mq5` draws EMA(200), EMA(9), EMA(36), and closed-candle
-BUY/SELL arrows. Alerts are disabled by default and can be enabled in the indicator inputs. Push
-and email alerts depend on the notification details configured inside MT5. The file contains no
-`CTrade`, `OrderSend`, or other order-placement call.
+`integrations/mt5/TraderAI_VideoMAMTFMACD.mq5` is a separate, signal-only MT5 companion for chart
+visualization and alerts. The workstation paper bot is the authoritative implementation of the
+ten-period ribbon/pullback/RSI gate described above. Alerts are disabled by default and can be
+enabled in the indicator inputs. Push and email alerts depend on the notification details
+configured inside MT5. The file contains no `CTrade`, `OrderSend`, or other order-placement call.
 
 To use it on desktop MT5, compile it in MetaEditor and attach it to the chart. Set the chart to M5
 and keep confirmation at M15 to match the video, or change the inputs for research. MT5 mobile

@@ -28,10 +28,11 @@ HIGHER_TIMEFRAME = {
     "4h": "1d",
     "1d": "1d",
 }
+VIDEO_MA_PERIODS = (5, 10, 20, 30, 50, 75, 100, 150, 200, 250)
 
 
 class VideoMAMTFMACDBotService:
-    """Paper-only interpretation of the MA + multi-timeframe MACD setup in the video."""
+    """Paper-only scalping interpretation of the supplied MA ribbon/MACD rules."""
 
     name = "Video MA + MTF MACD Bot"
     default_timeframe = "5m"
@@ -42,14 +43,15 @@ class VideoMAMTFMACDBotService:
         bridge: MT5ReadOnlyBridge,
         *,
         timeframe_options: Sequence[str] = SUPPORTED_TIMEFRAMES,
-        target_r_multiple: float = 2.0,
-        trend_period: int = 200,
-        fast_period: int = 9,
-        slow_period: int = 36,
+        target_r_multiple: float = 1.5,
+        ma_periods: Sequence[int] = VIDEO_MA_PERIODS,
+        rsi_period: int = 14,
         macd_fast: int = 12,
         macd_slow: int = 26,
         macd_signal: int = 9,
         swing_lookback: int = 5,
+        pullback_atr_tolerance: float = 0.75,
+        partial_r_multiple: float = 1.0,
     ) -> None:
         self.ledger = ledger
         self.bridge = bridge
@@ -58,13 +60,16 @@ class VideoMAMTFMACDBotService:
             or SUPPORTED_TIMEFRAMES
         )
         self.target_r_multiple = target_r_multiple
-        self.trend_period = trend_period
-        self.fast_period = fast_period
-        self.slow_period = slow_period
+        self.ma_periods = _normalise_ma_periods(ma_periods)
+        self.rsi_period = rsi_period
         self.macd_fast = macd_fast
         self.macd_slow = macd_slow
         self.macd_signal = macd_signal
         self.swing_lookback = swing_lookback
+        self.pullback_atr_tolerance = pullback_atr_tolerance
+        self.partial_r_multiple = partial_r_multiple
+        if target_r_multiple <= partial_r_multiple:
+            raise ValueError("The final target must be greater than the partial target.")
 
     @property
     def enabled(self) -> bool:
@@ -160,7 +165,7 @@ class VideoMAMTFMACDBotService:
         symbols, candles_by_symbol = self.bridge.scan_market_candles(
             account,
             timeframe,
-            260,
+            max(260, max(self.ma_periods) + 20),
             max_symbols,
             force=force,
         )
@@ -196,10 +201,11 @@ class VideoMAMTFMACDBotService:
             scanned_symbols=len(candles_by_symbol),
             generated_at=now,
             disclaimer=(
-                "This is a configurable, video-derived interpretation of EMA 200, EMA 9/36, "
-                "and higher-timeframe MACD confirmation. The source video does not establish "
-                "a complete proprietary rule set. Results are paper-only and do not guarantee "
-                "profit."
+                "This is a configurable, paper-only interpretation of the supplied fast-scalping "
+                "rules: a 10-in-1 EMA ribbon, pullback, RSI/reversal-candle momentum, and custom "
+                "multi-timeframe MACD confirmation. The exact TradingView script settings were not "
+                "provided, so this is not a pixel-identical or proprietary-script clone. It does "
+                "not guarantee profit."
             ),
             opportunities=opportunities,
         )
@@ -212,20 +218,23 @@ class VideoMAMTFMACDBotService:
         timeframe: str,
         now: datetime,
     ) -> MarketOpportunity | None:
-        minimum_candles = max(self.trend_period + 2, self.slow_period + 3, 220)
+        minimum_candles = max(
+            max(self.ma_periods) + 3,
+            self.macd_slow + self.macd_signal + 3,
+            220,
+        )
         if len(candles) < minimum_candles or metadata is None:
             return None
         values = [candle.close for candle in candles]
-        ema200 = _ema_series(values, self.trend_period)
-        fast = _ema_series(values, self.fast_period)
-        slow = _ema_series(values, self.slow_period)
+        moving_averages = [_ema_series(values, period) for period in self.ma_periods]
         current_macd, current_signal, current_histogram = _macd(
             values,
             self.macd_fast,
             self.macd_slow,
             self.macd_signal,
         )
-        higher_candles = _aggregate_candles(candles, HIGHER_TIMEFRAME.get(timeframe, timeframe))
+        higher_timeframe = HIGHER_TIMEFRAME.get(timeframe, timeframe)
+        higher_candles = _aggregate_candles(candles, higher_timeframe)
         if len(higher_candles) < self.macd_slow + self.macd_signal + 2:
             return None
         higher_values = [candle.close for candle in higher_candles]
@@ -241,36 +250,62 @@ class VideoMAMTFMACDBotService:
         if not isfinite(atr) or atr <= 0 or latest.close <= 0:
             return None
 
-        bullish_candle = latest.close > latest.open
-        bearish_candle = latest.close < latest.open
-        body_ratio = _body(latest) / max(_range(latest), 1e-12)
-        bullish_trigger = _fresh_cross_or_reclaim(
-            fast[-2], slow[-2], fast[-1], slow[-1], previous.close, latest.close, fast[-2], True
+        latest_ribbon = [series[-1] for series in moving_averages]
+        previous_ribbon = [series[-2] for series in moving_averages]
+        bullish_alignment = _ribbon_alignment(latest_ribbon, True)
+        bearish_alignment = _ribbon_alignment(latest_ribbon, False)
+        bullish_slope = latest_ribbon[-1] > moving_averages[-1][-3]
+        bearish_slope = latest_ribbon[-1] < moving_averages[-1][-3]
+        pullback_window = candles[-max(self.swing_lookback * 2 + 2, 8) : -1]
+        support = min(item.low for item in pullback_window)
+        resistance = max(item.high for item in pullback_window)
+        tolerance = atr * self.pullback_atr_tolerance
+        bullish_pullback = _pullback_touched(
+            previous,
+            previous_ribbon[:5],
+            support,
+            tolerance,
+            True,
         )
-        bearish_trigger = _fresh_cross_or_reclaim(
-            fast[-2], slow[-2], fast[-1], slow[-1], previous.close, latest.close, fast[-2], False
+        bearish_pullback = _pullback_touched(
+            previous,
+            previous_ribbon[:5],
+            resistance,
+            tolerance,
+            False,
         )
-        bullish = (
-            latest.close > ema200[-1]
-            and fast[-1] > slow[-1]
-            and current_macd[-1] > current_signal[-1]
+        rsi = _rsi_series(values, self.rsi_period)
+        bullish_rsi_reversal = _rsi_reversal(rsi, True)
+        bearish_rsi_reversal = _rsi_reversal(rsi, False)
+        bullish_candle_reversal = _bullish_reversal_candle(previous, latest)
+        bearish_candle_reversal = _bearish_reversal_candle(previous, latest)
+        bullish_macd = (
+            current_macd[-1] > current_signal[-1]
             and current_histogram[-1] > 0
             and higher_macd[-1] > higher_signal[-1]
             and higher_histogram[-1] > 0
-            and bullish_candle
-            and body_ratio >= 0.35
-            and bullish_trigger
         )
-        bearish = (
-            latest.close < ema200[-1]
-            and fast[-1] < slow[-1]
-            and current_macd[-1] < current_signal[-1]
+        bearish_macd = (
+            current_macd[-1] < current_signal[-1]
             and current_histogram[-1] < 0
             and higher_macd[-1] < higher_signal[-1]
             and higher_histogram[-1] < 0
-            and bearish_candle
-            and body_ratio >= 0.35
-            and bearish_trigger
+        )
+        bullish = (
+            latest.close > latest_ribbon[0]
+            and bullish_alignment >= 7
+            and bullish_slope
+            and bullish_pullback
+            and (bullish_candle_reversal or bullish_rsi_reversal)
+            and bullish_macd
+        )
+        bearish = (
+            latest.close < latest_ribbon[0]
+            and bearish_alignment >= 7
+            and bearish_slope
+            and bearish_pullback
+            and (bearish_candle_reversal or bearish_rsi_reversal)
+            and bearish_macd
         )
         if not bullish and not bearish:
             return None
@@ -283,29 +318,69 @@ class VideoMAMTFMACDBotService:
         )
         spread_pct = (metadata.ask - metadata.bid) / midpoint * 100 if midpoint > 0 else 0.0
         if direction == Direction.buy:
-            stop_loss = min(item.low for item in candles[-self.swing_lookback:]) - atr * 0.2
+            stop_loss = min(item.low for item in candles[-self.swing_lookback - 1 : -1]) - atr * 0.2
             risk_distance = latest.close - stop_loss
             take_profit = latest.close + risk_distance * self.target_r_multiple
+            partial_take_profit = latest.close + risk_distance * self.partial_r_multiple
             impact: Literal["bullish", "bearish"] = "bullish"
-            trend_message = "Closed price is above EMA(200); the regime is bullish."
-            direction_message = "EMA(9) is above EMA(36) after a fresh cross or reclaim."
-            candle_message = "The latest closed candle is bullish with a meaningful body."
-            macd_message = "Current and higher-timeframe MACD histograms are positive."
+            trend_message = (
+                f"Closed price is above the fastest EMA and {bullish_alignment}/9 ribbon "
+                "relationships are bullish."
+            )
+            direction_message = (
+                "The prior candle pulled back into the fast EMA ribbon or recent support, "
+                "then the latest candle reclaimed direction."
+            )
+            candle_message = _momentum_message(
+                bullish_candle_reversal,
+                bullish_rsi_reversal,
+                True,
+            )
+            macd_message = (
+                "Current and higher-timeframe custom MACD lines and histograms agree bullishly."
+            )
         else:
-            stop_loss = max(item.high for item in candles[-self.swing_lookback:]) + atr * 0.2
+            stop_loss = (
+                max(item.high for item in candles[-self.swing_lookback - 1 : -1]) + atr * 0.2
+            )
             risk_distance = stop_loss - latest.close
             take_profit = latest.close - risk_distance * self.target_r_multiple
+            partial_take_profit = latest.close - risk_distance * self.partial_r_multiple
             impact = "bearish"
-            trend_message = "Closed price is below EMA(200); the regime is bearish."
-            direction_message = "EMA(9) is below EMA(36) after a fresh cross or reclaim."
-            candle_message = "The latest closed candle is bearish with a meaningful body."
-            macd_message = "Current and higher-timeframe MACD histograms are negative."
-        if stop_loss <= 0 or take_profit <= 0 or risk_distance <= 0:
+            trend_message = (
+                f"Closed price is below the fastest EMA and {bearish_alignment}/9 ribbon "
+                "relationships are bearish."
+            )
+            direction_message = (
+                "The prior candle pulled back into the fast EMA ribbon or recent resistance, "
+                "then the latest candle rejected lower."
+            )
+            candle_message = _momentum_message(
+                bearish_candle_reversal,
+                bearish_rsi_reversal,
+                False,
+            )
+            macd_message = (
+                "Current and higher-timeframe custom MACD lines and histograms agree bearishly."
+            )
+        if stop_loss <= 0 or take_profit <= 0 or partial_take_profit <= 0 or risk_distance <= 0:
             return None
 
-        score = 76.0
-        score += min(8.0, abs(fast[-1] - slow[-1]) / atr * 2.0)
-        score += min(6.0, body_ratio * 6.0)
+        alignment = bullish_alignment if direction == Direction.buy else bearish_alignment
+        candle_reversal = bullish_candle_reversal or bearish_candle_reversal
+        rsi_reversal = bullish_rsi_reversal or bearish_rsi_reversal
+        histogram_rising = (
+            current_histogram[-1] > current_histogram[-2]
+            if direction == Direction.buy
+            else current_histogram[-1] < current_histogram[-2]
+        )
+        body_ratio = _body(latest) / max(_range(latest), 1e-12)
+        score = 70.0
+        score += min(9.0, float(alignment))
+        score += 3.0 if candle_reversal else 0.0
+        score += 3.0 if rsi_reversal else 0.0
+        score += min(4.0, body_ratio * 4.0)
+        score += 2.0 if histogram_rising else 0.0
         score += min(5.0, abs(higher_histogram[-1]) / max(atr, 1e-12) * 2.0)
         score -= min(8.0, spread_pct * 150)
         score = round(max(0.0, min(100.0, score)), 1)
@@ -323,13 +398,14 @@ class VideoMAMTFMACDBotService:
         return MarketOpportunity(
             rank=0,
             symbol=symbol,
-            description=f"{symbol} video-derived MA + MTF MACD setup",
+            description=f"{symbol} 10-in-1 EMA ribbon pullback + MTF MACD setup",
             category=self.name,
             direction=direction,
             confidence=round(min(0.96, 0.72 + score / 400), 3),
             entry=latest.close,
             stop_loss=round(stop_loss, 8),
             take_profit=round(take_profit, 8),
+            partial_take_profit=round(partial_take_profit, 8),
             opportunity_score=score if market_active else round(score * 0.25, 1),
             estimated_move_pct=round(abs(take_profit - latest.close) / latest.close * 100, 3),
             spread_pct=round(spread_pct, 4),
@@ -341,19 +417,18 @@ class VideoMAMTFMACDBotService:
                 SignalReason("moving-average", direction_message, impact, 0.2),
                 SignalReason(
                     "macd",
-                    (
-                        f"{macd_message} Confirmation timeframe: "
-                        f"{HIGHER_TIMEFRAME.get(timeframe, timeframe)}."
-                    ),
+                    f"{macd_message} Confirmation timeframe: {higher_timeframe}.",
                     impact,
                     0.28,
                 ),
-                SignalReason("candle", candle_message, impact, 0.12),
+                SignalReason("momentum", candle_message, impact, 0.12),
                 SignalReason(
                     "risk",
                     (
-                        f"Swing/ATR stop is {risk_distance:.8g} away and target is "
-                        f"{self.target_r_multiple:.2f}R; paper fill only."
+                        f"Swing/ATR stop is {risk_distance:.8g} away; TP1 is "
+                        f"{self.partial_r_multiple:.2f}R, final target is "
+                        f"{self.target_r_multiple:.2f}R. After TP1 the paper ledger closes half "
+                        "and moves the remaining stop to breakeven."
                     ),
                     "risk",
                     0.2,
@@ -361,7 +436,7 @@ class VideoMAMTFMACDBotService:
             ],
             signal_at=latest.ts,
             signal_price=latest.close,
-            signal_level="video-ma-mtf-macd",
+            signal_level="video-ma-ribbon-mtf-macd",
             signal_recommendation=direction.value.upper(),
         )
 
@@ -405,23 +480,126 @@ def _macd(
     return main, signal, histogram
 
 
-def _fresh_cross_or_reclaim(
-    previous_fast: float,
-    previous_slow: float,
-    current_fast: float,
-    current_slow: float,
-    previous_close: float,
-    current_close: float,
-    previous_fast_value: float,
+def _normalise_ma_periods(periods: Sequence[int]) -> tuple[int, ...]:
+    normalised = tuple(sorted({int(period) for period in periods}))
+    if len(normalised) != 10 or any(period < 2 for period in normalised):
+        raise ValueError("The video strategy requires exactly ten moving-average periods >= 2.")
+    return normalised
+
+
+def _ribbon_alignment(values: Sequence[float], bullish: bool) -> int:
+    return sum(
+        left > right if bullish else left < right
+        for left, right in zip(values, values[1:], strict=False)
+    )
+
+
+def _pullback_touched(
+    candle: Candle,
+    moving_average_levels: Sequence[float],
+    structure_level: float,
+    tolerance: float,
     bullish: bool,
 ) -> bool:
-    if bullish:
-        return (current_fast > current_slow and previous_fast <= previous_slow) or (
-            previous_close <= previous_fast_value and current_close > current_fast
-        )
-    return (current_fast < current_slow and previous_fast >= previous_slow) or (
-        previous_close >= previous_fast_value and current_close < current_fast
+    levels = [*moving_average_levels, structure_level]
+    touched = any(
+        candle.low <= level + tolerance and candle.high >= level - tolerance
+        for level in levels
     )
+    return touched and (candle.close < candle.open if bullish else candle.close > candle.open)
+
+
+def _rsi_series(values: Sequence[float], period: int) -> list[float]:
+    if not values:
+        return []
+    if period < 2 or len(values) <= period:
+        return [50.0] * len(values)
+    gains = [0.0] * len(values)
+    losses = [0.0] * len(values)
+    for index in range(1, len(values)):
+        change = float(values[index]) - float(values[index - 1])
+        gains[index] = max(change, 0.0)
+        losses[index] = max(-change, 0.0)
+    average_gain = sum(gains[1 : period + 1]) / period
+    average_loss = sum(losses[1 : period + 1]) / period
+    result = [50.0] * len(values)
+
+    def value() -> float:
+        if average_loss == 0:
+            return 100.0 if average_gain > 0 else 50.0
+        relative_strength = average_gain / average_loss
+        return 100.0 - 100.0 / (1.0 + relative_strength)
+
+    result[period] = value()
+    for index in range(period + 1, len(values)):
+        average_gain = ((average_gain * (period - 1)) + gains[index]) / period
+        average_loss = ((average_loss * (period - 1)) + losses[index]) / period
+        result[index] = value()
+    return result
+
+
+def _rsi_reversal(values: Sequence[float], bullish: bool) -> bool:
+    if len(values) < 2:
+        return False
+    previous, current = values[-2], values[-1]
+    if bullish:
+        return current > previous and current >= 45.0 and (previous <= 50.0 or current >= 52.0)
+    return current < previous and current <= 55.0 and (previous >= 50.0 or current <= 48.0)
+
+
+def _bullish_reversal_candle(previous: Candle, latest: Candle) -> bool:
+    previous_bearish = previous.close < previous.open
+    latest_bullish = latest.close > latest.open
+    engulfing = (
+        previous_bearish
+        and latest_bullish
+        and latest.open <= previous.close
+        and latest.close >= previous.open
+    )
+    body = _body(latest)
+    lower_wick = min(latest.open, latest.close) - latest.low
+    pin_reversal = (
+        latest_bullish
+        and lower_wick >= max(body * 1.25, _range(latest) * 0.35)
+        and latest.close > previous.close
+    )
+    breakout = latest_bullish and latest.close > previous.high
+    return engulfing or pin_reversal or breakout
+
+
+def _bearish_reversal_candle(previous: Candle, latest: Candle) -> bool:
+    previous_bullish = previous.close > previous.open
+    latest_bearish = latest.close < latest.open
+    engulfing = (
+        previous_bullish
+        and latest_bearish
+        and latest.open >= previous.close
+        and latest.close <= previous.open
+    )
+    body = _body(latest)
+    upper_wick = latest.high - max(latest.open, latest.close)
+    pin_reversal = (
+        latest_bearish
+        and upper_wick >= max(body * 1.25, _range(latest) * 0.35)
+        and latest.close < previous.close
+    )
+    breakout = latest_bearish and latest.close < previous.low
+    return engulfing or pin_reversal or breakout
+
+
+def _momentum_message(
+    candle_reversal: bool,
+    rsi_reversal: bool,
+    bullish: bool,
+) -> str:
+    direction = "bullish" if bullish else "bearish"
+    signals = []
+    if candle_reversal:
+        signals.append(f"a {direction} reversal candle or breakout")
+    if rsi_reversal:
+        signals.append("an RSI reversal")
+    evidence = " and ".join(signals) if signals else "confirmed momentum"
+    return f"The latest closed candle confirms {direction} momentum through {evidence}."
 
 
 def _aggregate_candles(candles: Sequence[Candle], timeframe: str) -> list[Candle]:
