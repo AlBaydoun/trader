@@ -631,17 +631,19 @@ function TradeHistory({ trades, extreme, onNoteSave }: { trades: PaperTrade[]; e
   return (
     <div className="paper-table-wrap">
       <table className="paper-table history-table">
-        <thead><tr><th>Market</th><th>Timeframe</th><th>{extreme ? "Signal / fill / exit" : "Entry / exit"}</th><th>Net result</th><th>Excursion</th><th>Costs</th><th>Exit</th><th>Duration</th><th>Note</th></tr></thead>
+        <thead><tr><th>Market</th><th>Timeframe</th><th>{extreme ? "Signal / fill / exit" : "Entry / exit price"}</th><th>Entered at</th><th>Exited at</th><th>Net result</th><th>Excursion</th><th>Costs</th><th>Exit reason</th><th>Duration</th><th>Note</th></tr></thead>
         <tbody>{trades.map((trade) => (
           <tr key={trade.id}>
             <td><strong>{trade.symbol}</strong><span className={`side ${trade.direction}`}>{trade.direction}</span></td>
             <td title={`Executed on ${trade.timeframe}`}><strong>{formatTimeframe(trade.timeframe)}</strong><span>Entry execution</span></td>
             <td>{extreme && trade.signal_level ? levelLabel(trade.signal_level) : price(trade.entry_price)}<span>{extreme ? `${price(trade.signal_price ?? trade.entry_price)} fill ${price(trade.entry_price)}` : price(trade.exit_price)}</span>{extreme && <small>Exit {price(trade.exit_price)}</small>}</td>
+            <td className="trade-event-time" title={`${new Date(trade.opened_at).toISOString()} UTC`}><strong>{exactDateTime(trade.opened_at)}</strong><span>{timeZoneLabel()}</span></td>
+            <td className="trade-event-time" title={trade.closed_at ? `${new Date(trade.closed_at).toISOString()} UTC` : "Trade is still open"}>{trade.closed_at ? <strong>{exactDateTime(trade.closed_at)}</strong> : <strong>--</strong>}<span>{trade.closed_at ? timeZoneLabel() : "Not closed"}</span></td>
             <td className={pnlClass(trade.net_pnl)}><strong>{signedMoney(trade.net_pnl)}</strong><span>{trade.r_multiple.toFixed(2)}R / {trade.return_pct.toFixed(3)}%</span></td>
             <td>{signedMoney(trade.max_favorable_excursion)}<span>{signedMoney(trade.max_adverse_excursion)}</span></td>
             <td>{money(trade.entry_fee + trade.exit_fee)}<span>virtual fees</span></td>
-            <td>{exitLabel(trade.exit_reason)}<span>{trade.closed_at ? dateTime(trade.closed_at) : "--"}</span></td>
-            <td>{duration(signalTime(trade), trade.closed_at)}<span title={trade.signal_recommendation ?? trade.reasons.join(" ")}>{extreme ? `${dateTime(signalTime(trade))} signal` : `Score ${trade.opportunity_score.toFixed(1)}`}</span></td>
+            <td>{exitLabel(trade.exit_reason)}<span>{trade.closed_at ? "Exit recorded" : "Open"}</span></td>
+            <td>{duration(trade.opened_at, trade.closed_at)}<span title={trade.signal_recommendation ?? trade.reasons.join(" ")}>{extreme ? `${exactDateTime(signalTime(trade))} signal` : `Score ${trade.opportunity_score.toFixed(1)}`}</span></td>
             <td><NoteCell trade={trade} onSave={onNoteSave} busy={false} /></td>
           </tr>
         ))}</tbody>
@@ -775,6 +777,8 @@ function pnlClass(value: number) { return value > 0 ? "positive" : value < 0 ? "
 function price(value: number | null) { return value === null ? "--" : value.toLocaleString(undefined, { maximumFractionDigits: 8 }); }
 function time(value: string) { return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(value)); }
 function dateTime(value: string) { return new Intl.DateTimeFormat(undefined, { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value)); }
+function exactDateTime(value: string) { return new Intl.DateTimeFormat(undefined, { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(new Date(value)); }
+function timeZoneLabel() { return Intl.DateTimeFormat().resolvedOptions().timeZone; }
 function age(value: string) { const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); return seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m` : `${Math.floor(seconds / 3600)}h`; }
 function duration(start: string, end: string | null) { if (!end) return age(start); const seconds = Math.max(0, Math.floor((new Date(end).getTime() - new Date(start).getTime()) / 1000)); return seconds < 3600 ? `${Math.max(1, Math.floor(seconds / 60))}m` : `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m`; }
 function exitLabel(reason: PaperTrade["exit_reason"]) { return reason ? reason.replaceAll("_", " ") : "--"; }

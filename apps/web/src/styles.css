@@ -3296,6 +3296,14 @@ button:disabled {
   font-size: 11px;
 }
 
+.history-table {
+  min-width: 1260px;
+}
+
+.history-table .trade-event-time strong {
+  font-variant-numeric: tabular-nums;
+}
+
 .paper-table th {
   height: 32px;
   padding: 0 10px;
