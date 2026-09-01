@@ -84,6 +84,13 @@ npm run dev
 
 Open `http://localhost:5173`. The UI reads the API from `VITE_API_URL`, defaulting to `http://localhost:8000`.
 
+### One-Click Windows Launch
+
+Double-click `Launch Trader AI Workstation.cmd`. You can copy this file to the Desktop; it starts
+the local API and web app, waits for both to become ready, and opens the workstation automatically.
+MT5 must remain open and signed in for live broker candle data. The workstation remains paper-only
+unless live trading is explicitly configured.
+
 For multiple MT5 accounts, copy `config/mt5-accounts.example.json` to
 `data/mt5-accounts.json` and add the non-secret account profiles. The `data` directory is ignored
 by Git. Sign into the selected account in MT5; do not store trading passwords in the profile file.
