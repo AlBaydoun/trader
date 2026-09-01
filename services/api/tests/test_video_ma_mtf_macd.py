@@ -5,17 +5,22 @@ from app.domain.models import Candle, Direction
 from app.services.market_scanner import MarketScanResult
 from app.services.mt5_bridge import MT5MarketSymbol
 from app.services.paper_trading import PaperTradingService
-from app.services.video_ma_mtf_macd import VideoMAMTFMACDBotService, _aggregate_candles
+from app.services.video_ma_mtf_macd import (
+    VideoMAMTFMACDBotService,
+    _aggregate_candles,
+    _histogram_state,
+    _macd,
+)
 
 
 def history(direction: Direction | None = None) -> list[Candle]:
     closes = [100.0] * 220
     if direction == Direction.buy:
         closes.extend(100.0 + index * 0.15 for index in range(30))
-        closes.extend([104.0, 103.0, 105.0])
+        closes.extend([104.0, 103.0, 106.0])
     elif direction == Direction.sell:
         closes.extend(100.0 - index * 0.15 for index in range(30))
-        closes.extend([96.0, 97.0, 95.0])
+        closes.extend([96.0, 97.0, 94.0])
     else:
         closes.extend([100.0, 100.05, 100.0])
     candles: list[Candle] = []
@@ -82,14 +87,25 @@ def test_aggregates_m5_candles_into_m15() -> None:
 
     assert len(aggregated) == 85
     assert aggregated[-1].timeframe == "15m"
-    assert aggregated[-1].close == 105.0
+    assert aggregated[-1].close == 106.0
+
+
+def test_video_macd_matches_cm_signal_sma_and_histogram_colors() -> None:
+    main, signal, histogram = _macd([1.0, 2.0, 4.0, 3.0], 2, 3, 2)
+
+    assert signal == [0.0, 0.08333333333333326, 0.3194444444444444, 0.33564814814814836]
+    assert histogram[-1] == main[-1] - signal[-1]
+    assert _histogram_state(1.0, 0.5) == "aqua"
+    assert _histogram_state(0.5, 1.0) == "blue"
+    assert _histogram_state(-1.0, -0.5) == "red"
+    assert _histogram_state(-0.5, -1.0) == "maroon"
 
 
 def test_video_strategy_creates_bullish_setup(tmp_path) -> None:
     setup = bot(tmp_path)._opportunity(
         "TEST",
         history(Direction.buy),
-        metadata(105.0),
+        metadata(106.0),
         "5m",
         datetime.now(UTC),
     )
@@ -108,7 +124,7 @@ def test_video_strategy_creates_bearish_setup(tmp_path) -> None:
     setup = bot(tmp_path)._opportunity(
         "TEST",
         history(Direction.sell),
-        metadata(95.0),
+        metadata(94.0),
         "5m",
         datetime.now(UTC),
     )
@@ -149,7 +165,7 @@ def test_video_strategy_paper_ledger_takes_tp1_and_moves_stop_to_breakeven(tmp_p
     setup = bot(tmp_path)._opportunity(
         "TEST",
         history(Direction.buy),
-        metadata(105.0),
+        metadata(106.0),
         "5m",
         first,
     )

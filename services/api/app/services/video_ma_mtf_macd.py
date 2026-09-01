@@ -279,6 +279,12 @@ class VideoMAMTFMACDBotService:
         bearish_rsi_reversal = _rsi_reversal(rsi, False)
         bullish_candle_reversal = _bullish_reversal_candle(previous, latest)
         bearish_candle_reversal = _bearish_reversal_candle(previous, latest)
+        current_histogram_state = _histogram_state(
+            current_histogram[-1], current_histogram[-2]
+        )
+        higher_histogram_state = _histogram_state(
+            higher_histogram[-1], higher_histogram[-2]
+        )
         bullish_macd = (
             current_macd[-1] > current_signal[-1]
             and current_histogram[-1] > 0
@@ -337,7 +343,8 @@ class VideoMAMTFMACDBotService:
                 True,
             )
             macd_message = (
-                "Current and higher-timeframe custom MACD lines and histograms agree bullishly."
+                "Current and higher-timeframe CM MACD lines and histograms agree bullishly; "
+                f"histogram states are {current_histogram_state}/{higher_histogram_state}."
             )
         else:
             stop_loss = (
@@ -361,7 +368,8 @@ class VideoMAMTFMACDBotService:
                 False,
             )
             macd_message = (
-                "Current and higher-timeframe custom MACD lines and histograms agree bearishly."
+                "Current and higher-timeframe CM MACD lines and histograms agree bearishly; "
+                f"histogram states are {current_histogram_state}/{higher_histogram_state}."
             )
         if stop_loss <= 0 or take_profit <= 0 or partial_take_profit <= 0 or risk_distance <= 0:
             return None
@@ -472,12 +480,28 @@ def _macd(
     fast = _ema_series(values, fast_period)
     slow = _ema_series(values, slow_period)
     main = [fast_value - slow_value for fast_value, slow_value in zip(fast, slow, strict=True)]
-    signal = _ema_series(main, signal_period)
+    # CM_Ult_MacD_MTF uses SMA(macd, signalLength), not the EMA signal used by
+    # many standard MACD implementations.
+    signal = _sma_series(main, signal_period)
     histogram = [
         main_value - signal_value
         for main_value, signal_value in zip(main, signal, strict=True)
     ]
     return main, signal, histogram
+
+
+def _sma_series(values: Sequence[float], period: int) -> list[float]:
+    if not values:
+        return []
+    result: list[float] = []
+    running_total = 0.0
+    for index, value in enumerate(values):
+        running_total += float(value)
+        if index >= period:
+            running_total -= float(values[index - period])
+        window = min(index + 1, period)
+        result.append(running_total / window)
+    return result
 
 
 def _normalise_ma_periods(periods: Sequence[int]) -> tuple[int, ...]:
@@ -545,6 +569,19 @@ def _rsi_reversal(values: Sequence[float], bullish: bool) -> bool:
     if bullish:
         return current > previous and current >= 45.0 and (previous <= 50.0 or current >= 52.0)
     return current < previous and current <= 55.0 and (previous >= 50.0 or current <= 48.0)
+
+
+def _histogram_state(current: float, previous: float) -> str:
+    """Return the four-color CM MACD histogram state used by the supplied script."""
+    if current > previous and current > 0:
+        return "aqua"
+    if current < previous and current > 0:
+        return "blue"
+    if current < previous and current <= 0:
+        return "red"
+    if current > previous and current <= 0:
+        return "maroon"
+    return "yellow"
 
 
 def _bullish_reversal_candle(previous: Candle, latest: Candle) -> bool:

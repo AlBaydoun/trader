@@ -20,7 +20,9 @@ The bot evaluates closed candles only. Its default ten-EMA ribbon periods are
 3. **Momentum:** the latest closed candle must confirm the move through a reversal candle/breakout
    or an RSI reversal. This includes the engulfing-style confirmation visible in the reference.
 4. **MACD confirmation:** the current timeframe and the next higher timeframe must agree on the
-   custom MACD line versus signal line and histogram sign. The default M5 chart confirms with M15.
+   custom MACD line versus signal line and histogram sign. The signal line uses the supplied
+   `SMA(9)` rule, and its four histogram states are retained for explainability. The default M5
+   chart confirms with M15.
 5. **Risk model:** the stop is beyond the recent five-candle swing with a 0.2 ATR buffer. TP1 is
    1.0R; the final target defaults to 1.5R. At TP1 the paper ledger closes half the virtual size and
    moves the remaining stop to breakeven. Position size is calculated by the existing risk budget.
